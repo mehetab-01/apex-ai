@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { 
   Search, 
@@ -11,17 +12,21 @@ import {
   Sparkles,
   TrendingUp,
   BookOpen,
-  RefreshCw
+  RefreshCw,
+  Globe,
+  DollarSign
 } from "lucide-react";
 import CourseCard from "@/components/CourseCard";
 import { PageLoader } from "@/components/LoadingSpinner";
 import ErrorDisplay, { EmptyState } from "@/components/ErrorDisplay";
-import { getCourses, getCategories, type Course } from "@/lib/api";
+import { getCourses, getCategories, getPlatforms, type Course } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [courses, setCourses] = useState<Course[]>([]);
   const [categories, setCategories] = useState<{ value: string; label: string }[]>([]);
+  const [platforms, setPlatforms] = useState<{ value: string; label: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -29,12 +34,15 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedDifficulty, setSelectedDifficulty] = useState("");
-  const [sortBy, setSortBy] = useState("-created_at");
+  const [selectedPlatform, setSelectedPlatform] = useState("");
+  const [freeOnly, setFreeOnly] = useState(false);
+  const [sortBy, setSortBy] = useState("-average_rating");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   
   // Filter dropdown states
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showDifficultyDropdown, setShowDifficultyDropdown] = useState(false);
+  const [showPlatformDropdown, setShowPlatformDropdown] = useState(false);
   const [showSortDropdown, setShowSortDropdown] = useState(false);
 
   const difficulties = [
@@ -46,12 +54,13 @@ export default function DashboardPage() {
   ];
 
   const sortOptions = [
+    { value: "-average_rating", label: "Highest Rated" },
     { value: "-created_at", label: "Newest First" },
     { value: "created_at", label: "Oldest First" },
-    { value: "-average_rating", label: "Highest Rated" },
     { value: "price", label: "Price: Low to High" },
     { value: "-price", label: "Price: High to Low" },
     { value: "title", label: "Title: A-Z" },
+    { value: "-total_enrollments", label: "Most Popular" },
   ];
 
   const fetchData = async () => {
@@ -59,18 +68,22 @@ export default function DashboardPage() {
     setError(null);
     
     try {
-      const [coursesData, categoriesData] = await Promise.all([
+      const [coursesData, categoriesData, platformsData] = await Promise.all([
         getCourses({
           category: selectedCategory || undefined,
           difficulty: selectedDifficulty || undefined,
+          platform: selectedPlatform || undefined,
+          free: freeOnly || undefined,
           search: searchQuery || undefined,
           ordering: sortBy,
         }),
         getCategories(),
+        getPlatforms(),
       ]);
       
       setCourses(coursesData);
       setCategories([{ value: "", label: "All Categories" }, ...categoriesData]);
+      setPlatforms([{ value: "", label: "All Platforms" }, ...platformsData]);
     } catch (err) {
       console.error("Failed to fetch data:", err);
       setError("Failed to load courses. Please check if the backend server is running.");
@@ -81,7 +94,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchData();
-  }, [selectedCategory, selectedDifficulty, sortBy]);
+  }, [selectedCategory, selectedDifficulty, selectedPlatform, freeOnly, sortBy]);
 
   // Debounced search
   useEffect(() => {
@@ -98,10 +111,12 @@ export default function DashboardPage() {
     setSearchQuery("");
     setSelectedCategory("");
     setSelectedDifficulty("");
-    setSortBy("-created_at");
+    setSelectedPlatform("");
+    setFreeOnly(false);
+    setSortBy("-average_rating");
   };
 
-  const hasActiveFilters = searchQuery || selectedCategory || selectedDifficulty || sortBy !== "-created_at";
+  const hasActiveFilters = searchQuery || selectedCategory || selectedDifficulty || selectedPlatform || freeOnly || sortBy !== "-average_rating";
 
   if (loading && courses.length === 0) {
     return (
@@ -136,28 +151,59 @@ export default function DashboardPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="glass-card p-4 mb-8"
+          className="glass-card p-4 mb-8 relative z-30"
         >
-          <div className="flex flex-col lg:flex-row gap-4">
-            {/* Search */}
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search courses..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-apex-darker border border-apex-border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-neon-cyan/50 transition-colors"
-              />
+          <div className="flex flex-col gap-4">
+            {/* Search Row */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              {/* Search Input */}
+              <div className="flex-1 relative min-w-0">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search courses..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-apex-darker border border-apex-border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-neon-cyan/50 transition-colors"
+                />
+              </div>
+              
+              {/* View Toggle - moves to right on larger screens */}
+              <div className="flex items-center gap-2 sm:ml-auto">
+                <button
+                  onClick={() => setViewMode("grid")}
+                  className={cn(
+                    "p-2.5 rounded-lg border transition-colors",
+                    viewMode === "grid"
+                      ? "bg-neon-cyan/10 border-neon-cyan/50 text-neon-cyan"
+                      : "bg-apex-darker border-apex-border text-gray-400 hover:border-neon-cyan/30"
+                  )}
+                >
+                  <Grid className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => setViewMode("list")}
+                  className={cn(
+                    "p-2.5 rounded-lg border transition-colors",
+                    viewMode === "list"
+                      ? "bg-neon-cyan/10 border-neon-cyan/50 text-neon-cyan"
+                      : "bg-apex-darker border-apex-border text-gray-400 hover:border-neon-cyan/30"
+                  )}
+                >
+                  <List className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
-            <div className="flex flex-wrap gap-3">
+            {/* Filters Row */}
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               {/* Category Filter */}
               <div className="relative">
                 <button
                   onClick={() => {
                     setShowCategoryDropdown(!showCategoryDropdown);
                     setShowDifficultyDropdown(false);
+                    setShowPlatformDropdown(false);
                     setShowSortDropdown(false);
                   }}
                   className="flex items-center gap-2 px-4 py-2.5 bg-apex-darker border border-apex-border rounded-lg text-gray-300 hover:border-neon-cyan/50 transition-colors"
@@ -200,6 +246,7 @@ export default function DashboardPage() {
                   onClick={() => {
                     setShowDifficultyDropdown(!showDifficultyDropdown);
                     setShowCategoryDropdown(false);
+                    setShowPlatformDropdown(false);
                     setShowSortDropdown(false);
                   }}
                   className="flex items-center gap-2 px-4 py-2.5 bg-apex-darker border border-apex-border rounded-lg text-gray-300 hover:border-neon-cyan/50 transition-colors"
@@ -236,6 +283,63 @@ export default function DashboardPage() {
                 )}
               </div>
 
+              {/* Platform Filter */}
+              <div className="relative">
+                <button
+                  onClick={() => {
+                    setShowPlatformDropdown(!showPlatformDropdown);
+                    setShowCategoryDropdown(false);
+                    setShowDifficultyDropdown(false);
+                    setShowSortDropdown(false);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-apex-darker border border-apex-border rounded-lg text-gray-300 hover:border-neon-cyan/50 transition-colors"
+                >
+                  <Globe className="w-4 h-4" />
+                  <span>{platforms.find(p => p.value === selectedPlatform)?.label || "Platform"}</span>
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+                
+                {showPlatformDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="absolute z-50 mt-2 w-56 max-h-64 overflow-y-auto bg-apex-card border border-apex-border rounded-lg shadow-xl"
+                  >
+                    {platforms.map((platform) => (
+                      <button
+                        key={platform.value}
+                        onClick={() => {
+                          setSelectedPlatform(platform.value);
+                          setShowPlatformDropdown(false);
+                        }}
+                        className={cn(
+                          "w-full px-4 py-2.5 text-left text-sm transition-colors",
+                          selectedPlatform === platform.value
+                            ? "bg-neon-cyan/10 text-neon-cyan"
+                            : "text-gray-300 hover:bg-white/5"
+                        )}
+                      >
+                        {platform.label}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Free Only Toggle */}
+              <button
+                onClick={() => setFreeOnly(!freeOnly)}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-colors",
+                  freeOnly
+                    ? "bg-neon-green/10 border-neon-green/50 text-neon-green"
+                    : "bg-apex-darker border-apex-border text-gray-300 hover:border-neon-cyan/50"
+                )}
+              >
+                <DollarSign className="w-4 h-4" />
+                <span>Free Only</span>
+              </button>
+
               {/* Sort */}
               <div className="relative">
                 <button
@@ -243,6 +347,7 @@ export default function DashboardPage() {
                     setShowSortDropdown(!showSortDropdown);
                     setShowCategoryDropdown(false);
                     setShowDifficultyDropdown(false);
+                    setShowPlatformDropdown(false);
                   }}
                   className="flex items-center gap-2 px-4 py-2.5 bg-apex-darker border border-apex-border rounded-lg text-gray-300 hover:border-neon-cyan/50 transition-colors"
                 >
@@ -275,28 +380,6 @@ export default function DashboardPage() {
                     ))}
                   </motion.div>
                 )}
-              </div>
-
-              {/* View Toggle */}
-              <div className="flex items-center border border-apex-border rounded-lg overflow-hidden">
-                <button
-                  onClick={() => setViewMode("grid")}
-                  className={cn(
-                    "p-2.5 transition-colors",
-                    viewMode === "grid" ? "bg-neon-cyan/10 text-neon-cyan" : "text-gray-400 hover:text-white"
-                  )}
-                >
-                  <Grid className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setViewMode("list")}
-                  className={cn(
-                    "p-2.5 transition-colors",
-                    viewMode === "list" ? "bg-neon-cyan/10 text-neon-cyan" : "text-gray-400 hover:text-white"
-                  )}
-                >
-                  <List className="w-4 h-4" />
-                </button>
               </div>
             </div>
           </div>
@@ -362,6 +445,8 @@ export default function DashboardPage() {
                 key={course.id}
                 course={course}
                 index={index}
+                viewMode={viewMode}
+                onInfoClick={() => router.push(`/course/${course.id}`)}
               />
             ))}
           </div>
@@ -378,12 +463,13 @@ export default function DashboardPage() {
       </div>
 
       {/* Click outside to close dropdowns */}
-      {(showCategoryDropdown || showDifficultyDropdown || showSortDropdown) && (
+      {(showCategoryDropdown || showDifficultyDropdown || showPlatformDropdown || showSortDropdown) && (
         <div
-          className="fixed inset-0 z-40"
+          className="fixed inset-0 z-20"
           onClick={() => {
             setShowCategoryDropdown(false);
             setShowDifficultyDropdown(false);
+            setShowPlatformDropdown(false);
             setShowSortDropdown(false);
           }}
         />

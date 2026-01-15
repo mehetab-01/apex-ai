@@ -136,7 +136,7 @@ export default function ProfilePage() {
       const formData = new FormData();
       formData.append("image", selectedImage);
       
-      const response = await fetch("http://localhost:8000/api/validate-face/", {
+      const response = await fetch("http://localhost:8000/api/auth/validate-face/", {
         method: "POST",
         body: formData,
       });

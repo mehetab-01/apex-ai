@@ -121,9 +121,9 @@ export default function Navbar() {
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
                   className="flex items-center gap-2 p-1.5 pr-3 rounded-full bg-apex-card border border-white/10 hover:border-neon-cyan/30 transition-all"
                 >
-                  {user?.profile_picture ? (
+                  {(user?.display_picture || user?.profile_picture) ? (
                     <img
-                      src={user.profile_picture}
+                      src={user.display_picture || user.profile_picture}
                       alt={user.full_name}
                       className="w-8 h-8 rounded-full object-cover"
                     />
@@ -159,20 +159,12 @@ export default function Navbar() {
                       
                       <div className="py-1">
                         <Link
-                          href="/profile"
+                          href="/settings"
                           onClick={() => setUserMenuOpen(false)}
                           className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
                         >
                           <UserCircle className="w-4 h-4" />
                           My Profile
-                        </Link>
-                        <Link
-                          href="/settings"
-                          onClick={() => setUserMenuOpen(false)}
-                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
-                        >
-                          <Settings className="w-4 h-4" />
-                          Settings
                         </Link>
                       </div>
 
