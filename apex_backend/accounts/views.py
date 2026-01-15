@@ -14,6 +14,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.utils import timezone
 from django.core.files.base import ContentFile
+from .utils import send_email_otp, send_sms_otp
 
 from rest_framework import status
 from rest_framework.views import APIView
@@ -86,17 +87,20 @@ class RegisterView(APIView):
                 otp_code=otp,
                 expires_at=timezone.now() + timedelta(minutes=10)
             )
-            
-            # In production, send OTP via email/SMS
-            # For demo, return it in response
+
+            # Send OTP via email or SMS
+            if user.email:
+                send_email_otp(user.email, otp)
+            elif user.phone_number:
+                send_sms_otp(user.phone_number, otp)
+
             tokens = get_tokens_for_user(user)
-            
+
             return Response({
                 'status': 'success',
                 'message': 'Registration successful. Please verify your account.',
                 'user': UserProfileSerializer(user, context={'request': request}).data,
                 'tokens': tokens,
-                'otp_code': otp,  # Remove in production - send via email/SMS instead
                 'next_step': 'verify_account'
             }, status=status.HTTP_201_CREATED)
         
@@ -1038,9 +1042,14 @@ class ResendOTPView(APIView):
             otp_code=otp,
             expires_at=timezone.now() + timedelta(minutes=10)
         )
-        
+
+        # Send OTP via email or SMS
+        if email:
+            send_email_otp(email, otp)
+        elif phone_number:
+            send_sms_otp(phone_number, otp)
+
         return Response({
             'status': 'success',
-            'message': 'OTP sent successfully',
-            'otp_code': otp  # Remove in production
+            'message': 'OTP sent successfully'
         })
