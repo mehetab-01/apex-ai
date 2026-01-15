@@ -188,7 +188,7 @@ export default function OnboardingPage() {
       const formData = new FormData();
       formData.append("image", blob, "frame.jpg");
       
-      const response = await fetch("http://localhost:8000/api/auth/validate-face/", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/validate-face/`, {
         method: "POST",
         body: formData,
       });
@@ -251,7 +251,7 @@ export default function OnboardingPage() {
       const formData = new FormData();
       formData.append("image", blob, "capture.jpg");
       
-      const response = await fetch("http://localhost:8000/api/auth/validate-face/", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/validate-face/`, {
         method: "POST",
         body: formData,
       });
@@ -306,7 +306,7 @@ export default function OnboardingPage() {
     const token = localStorage.getItem("apex_access_token");
     
     try {
-      const response = await fetch("http://localhost:8000/api/auth/complete-onboarding/", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/complete-onboarding/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

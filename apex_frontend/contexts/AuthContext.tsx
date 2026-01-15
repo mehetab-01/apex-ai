@@ -102,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       // Call logout API to blacklist token
-      await fetch("http://localhost:8000/api/auth/logout/", {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/logout/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -78,7 +78,7 @@ export default function RegisterPage() {
     }
     
     try {
-      const response = await fetch("http://localhost:8000/api/auth/register/", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -126,7 +126,7 @@ export default function RegisterPage() {
     setError(null);
     
     try {
-      const response = await fetch("http://localhost:8000/api/auth/verify-otp/", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/verify-otp/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -171,7 +171,7 @@ export default function RegisterPage() {
         client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
         callback: async (response: any) => {
           try {
-            const apiResponse = await fetch("http://localhost:8000/api/auth/google/", {
+            const apiResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/google/`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ token: response.credential }),

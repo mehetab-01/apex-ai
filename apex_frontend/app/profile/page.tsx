@@ -136,7 +136,7 @@ export default function ProfilePage() {
       const formData = new FormData();
       formData.append("image", selectedImage);
       
-      const response = await fetch("http://localhost:8000/api/auth/validate-face/", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/validate-face/`, {
         method: "POST",
         body: formData,
       });
@@ -163,7 +163,7 @@ export default function ProfilePage() {
     setError(null);
     
     try {
-      const response = await fetch("http://localhost:8000/api/save-profile-pic/", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/save-profile-pic/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
