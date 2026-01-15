@@ -191,12 +191,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
     
     display_name = serializers.SerializerMethodField()
     profile_picture_url = serializers.SerializerMethodField()
+    display_picture_url = serializers.SerializerMethodField()
     
     class Meta:
         model = ApexUser
         fields = [
             'id', 'email', 'phone_number', 'full_name',
-            'display_name', 'profile_picture_url',
+            'display_name', 'profile_picture_url', 'display_picture_url',
+            'college', 'branch', 'interests', 'bio',
             'face_validated', 'is_verified', 'onboarding_completed',
             'auth_provider', 'focus_points', 'total_focus_time_minutes',
             'courses_completed', 'created_at'
@@ -213,6 +215,39 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.profile_picture.url)
             return obj.profile_picture.url
         return None
+    
+    def get_display_picture_url(self, obj):
+        """Get the display picture URL. Falls back to profile picture if not set."""
+        if obj.display_picture:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.display_picture.url)
+            return obj.display_picture.url
+        # Fall back to profile picture if display picture not set
+        return self.get_profile_picture_url(obj)
+
+
+class UserProfileUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for updating user profile."""
+    
+    interests = serializers.ListField(
+        child=serializers.CharField(max_length=100),
+        required=False,
+        allow_empty=True
+    )
+    
+    class Meta:
+        model = ApexUser
+        fields = ['full_name', 'college', 'branch', 'interests', 'bio']
+    
+    def update(self, instance, validated_data):
+        instance.full_name = validated_data.get('full_name', instance.full_name)
+        instance.college = validated_data.get('college', instance.college)
+        instance.branch = validated_data.get('branch', instance.branch)
+        instance.interests = validated_data.get('interests', instance.interests)
+        instance.bio = validated_data.get('bio', instance.bio)
+        instance.save()
+        return instance
 
 
 class PasswordResetRequestSerializer(serializers.Serializer):

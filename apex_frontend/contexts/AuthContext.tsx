@@ -8,9 +8,14 @@ interface User {
   email: string;
   full_name: string;
   profile_picture?: string;
+  display_picture?: string;
   face_validated: boolean;
   onboarding_completed: boolean;
   is_verified: boolean;
+  college?: string;
+  branch?: string;
+  interests?: string[];
+  bio?: string;
 }
 
 interface AuthContextType {

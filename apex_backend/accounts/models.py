@@ -101,12 +101,48 @@ class ApexUser(AbstractBaseUser, PermissionsMixin):
         help_text="User's full name"
     )
     
-    # Face-validated profile picture (required for onboarding)
+    # Education details
+    college = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="User's college/university name"
+    )
+    
+    branch = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="User's branch/department of study"
+    )
+    
+    interests = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="User's learning interests as a list"
+    )
+    
+    bio = models.TextField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text="Short bio about the user"
+    )
+    
+    # Face-validated profile picture (required for onboarding/verification)
     profile_picture = models.ImageField(
         upload_to='profile_pics/',
         blank=True,
         null=True,
-        help_text="Face-validated profile picture"
+        help_text="Face-validated profile picture for verification"
+    )
+    
+    # Display picture (user's chosen avatar/profile pic)
+    display_picture = models.ImageField(
+        upload_to='display_pics/',
+        blank=True,
+        null=True,
+        help_text="User's display picture for their profile"
     )
     
     # Face validation status

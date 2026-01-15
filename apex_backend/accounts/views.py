@@ -2,6 +2,7 @@
 Apex Learning Platform - Authentication Views
 ==============================================
 Handles user registration, login, and onboarding with face validation.
+# Trigger reload - v2
 """
 
 import os
@@ -579,6 +580,76 @@ class CompleteOnboardingView(APIView):
         }, status=status.HTTP_400_BAD_REQUEST)
 
 
+class DisplayPictureUploadView(APIView):
+    """
+    Upload or update user's display picture (avatar).
+    This is separate from the face-validated profile picture.
+    
+    POST /api/auth/display-picture/
+    DELETE /api/auth/display-picture/
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    
+    def post(self, request):
+        user = request.user
+        
+        if 'image' not in request.FILES:
+            return Response({
+                'status': 'error',
+                'message': 'No image provided'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        image_file = request.FILES['image']
+        
+        # Validate file type
+        allowed_types = ['image/jpeg', 'image/png', 'image/webp']
+        if image_file.content_type not in allowed_types:
+            return Response({
+                'status': 'error',
+                'message': 'Invalid file type. Please upload a JPEG, PNG, or WebP image.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate file size (max 5MB)
+        if image_file.size > 5 * 1024 * 1024:
+            return Response({
+                'status': 'error',
+                'message': 'File too large. Maximum size is 5MB.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Delete old display picture if exists
+        if user.display_picture:
+            user.display_picture.delete(save=False)
+        
+        # Save new display picture
+        user.display_picture = image_file
+        user.save()
+        
+        # Get the URL of the new picture
+        display_picture_url = request.build_absolute_uri(user.display_picture.url)
+        
+        return Response({
+            'status': 'success',
+            'message': 'Display picture uploaded successfully',
+            'display_picture_url': display_picture_url
+        })
+    
+    def delete(self, request):
+        user = request.user
+        
+        if user.display_picture:
+            user.display_picture.delete(save=True)
+            return Response({
+                'status': 'success',
+                'message': 'Display picture removed'
+            })
+        
+        return Response({
+            'status': 'error',
+            'message': 'No display picture to remove'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
 class UserProfileView(APIView):
     """
     Get or update user profile.
@@ -596,21 +667,312 @@ class UserProfileView(APIView):
         })
     
     def put(self, request):
+        from .serializers import UserProfileUpdateSerializer
         user = request.user
-        serializer = UserProfileSerializer(user, data=request.data, partial=True)
+        serializer = UserProfileUpdateSerializer(user, data=request.data, partial=True)
         
         if serializer.is_valid():
             serializer.save()
             return Response({
                 'status': 'success',
                 'message': 'Profile updated successfully',
-                'user': serializer.data
+                'user': UserProfileSerializer(user, context={'request': request}).data
             })
         
         return Response({
             'status': 'error',
             'errors': serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CollegeAutocompleteView(APIView):
+    """
+    Get list of colleges in Mumbai for autocomplete.
+    
+    GET /api/auth/colleges/?q=<search_term>
+    """
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    
+    # Comprehensive list of Mumbai colleges
+    MUMBAI_COLLEGES = [
+        # IIT and Premier Institutes
+        "Indian Institute of Technology Bombay (IIT Bombay)",
+        "Veermata Jijabai Technological Institute (VJTI)",
+        "Institute of Chemical Technology (ICT Mumbai)",
+        "Tata Institute of Fundamental Research (TIFR)",
+        
+        # University of Mumbai affiliated
+        "University of Mumbai",
+        "SPIT - Sardar Patel Institute of Technology",
+        "DJ Sanghvi College of Engineering",
+        "Dwarkadas J. Sanghvi College of Engineering",
+        "K.J. Somaiya College of Engineering",
+        "K.J. Somaiya Institute of Engineering and IT",
+        "Thadomal Shahani Engineering College",
+        "Fr. Conceicao Rodrigues College of Engineering",
+        "Vidyalankar Institute of Technology",
+        "Vivekanand Education Society's Institute of Technology (VESIT)",
+        "Atharva College of Engineering",
+        "Shah & Anchor Kutchhi Engineering College",
+        "Rizvi College of Engineering",
+        "M.H. Saboo Siddik College of Engineering",
+        "Xavier Institute of Engineering",
+        "St. Francis Institute of Technology",
+        "Rajiv Gandhi Institute of Technology",
+        "Pillai College of Engineering",
+        "Terna Engineering College",
+        "Datta Meghe College of Engineering",
+        "Bharati Vidyapeeth College of Engineering",
+        "Lokmanya Tilak College of Engineering",
+        "Thakur College of Engineering and Technology",
+        "A.C. Patil College of Engineering",
+        "Alamuri Ratnamala Institute of Engineering and Technology",
+        "Anjuman-I-Islam's Kalsekar Technical Campus",
+        "Watumull Institute of Electronics Engineering and Computer Technology",
+        "Usha Mittal Institute of Technology",
+        "Yadavrao Tasgaonkar College of Engineering",
+        
+        # Autonomous Institutes
+        "NMIMS University - Mukesh Patel School of Technology Management & Engineering",
+        "Narsee Monjee Institute of Management Studies",
+        "MIT World Peace University (Mumbai Campus)",
+        
+        # Arts, Science & Commerce
+        "St. Xavier's College, Mumbai",
+        "Jai Hind College",
+        "H.R. College of Commerce and Economics",
+        "Mithibai College",
+        "N.M. College of Commerce and Economics",
+        "Ruia College",
+        "Wilson College",
+        "Sophia College for Women",
+        "K.C. College",
+        "Lala Lajpat Rai College of Commerce and Economics",
+        "Poddar College",
+        "R.A. Podar College of Commerce and Economics",
+        "Sydenham College of Commerce and Economics",
+        "Sathaye College",
+        "M.D. College",
+        
+        # Medical Colleges
+        "Grant Medical College and Sir J.J. Group of Hospitals",
+        "Seth G.S. Medical College and KEM Hospital",
+        "Topiwala National Medical College and B.Y.L. Nair Hospital",
+        "Lokmanya Tilak Municipal Medical College",
+        
+        # Management Institutes
+        "S.P. Jain Institute of Management and Research",
+        "Jamnalal Bajaj Institute of Management Studies",
+        "Welingkar Institute of Management",
+        "K.J. Somaiya Institute of Management",
+        "NMIMS School of Business Management",
+        
+        # Other Notable Colleges
+        "SNDT Women's University",
+        "Nirmala Niketan College of Home Science",
+        "College of Social Work, Nirmala Niketan",
+        "Indian Institute of Art and Design (IIAD Mumbai)",
+        "Sir J.J. Institute of Applied Art",
+        "Sir J.J. School of Art",
+    ]
+    
+    def get(self, request):
+        query = request.query_params.get('q', '').lower().strip()
+        
+        if not query:
+            return Response({
+                'status': 'success',
+                'colleges': self.MUMBAI_COLLEGES[:20]
+            })
+        
+        # Filter colleges matching the query
+        filtered = [
+            college for college in self.MUMBAI_COLLEGES
+            if query in college.lower()
+        ]
+        
+        return Response({
+            'status': 'success',
+            'colleges': filtered[:20]
+        })
+
+
+class BranchAutocompleteView(APIView):
+    """
+    Get list of engineering branches for autocomplete.
+    
+    GET /api/auth/branches/?q=<search_term>
+    """
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    
+    # Comprehensive list of engineering and other branches
+    ENGINEERING_BRANCHES = [
+        # Core Engineering
+        "Computer Engineering",
+        "Computer Science and Engineering",
+        "Information Technology",
+        "Electronics Engineering",
+        "Electronics and Telecommunication Engineering",
+        "Electronics and Communication Engineering",
+        "Electrical Engineering",
+        "Mechanical Engineering",
+        "Civil Engineering",
+        "Chemical Engineering",
+        "Production Engineering",
+        "Instrumentation Engineering",
+        "Biomedical Engineering",
+        "Biotechnology Engineering",
+        
+        # Specialized Engineering
+        "Artificial Intelligence and Machine Learning",
+        "AI & ML",
+        "Data Science",
+        "Data Science and Engineering",
+        "Cyber Security",
+        "Internet of Things (IoT)",
+        "Robotics and Automation",
+        "Mechatronics Engineering",
+        "Aerospace Engineering",
+        "Automobile Engineering",
+        "Marine Engineering",
+        "Petroleum Engineering",
+        "Mining Engineering",
+        "Textile Engineering",
+        "Agricultural Engineering",
+        "Environmental Engineering",
+        "Food Technology",
+        "Pharmaceutical Engineering",
+        
+        # Computer Related
+        "Software Engineering",
+        "Cloud Computing",
+        "Computer Science with AI",
+        "Computer Science with Data Science",
+        "Information Science",
+        
+        # Science Branches
+        "B.Sc. Computer Science",
+        "B.Sc. Information Technology",
+        "B.Sc. Physics",
+        "B.Sc. Chemistry",
+        "B.Sc. Mathematics",
+        "B.Sc. Electronics",
+        "B.Sc. Biotechnology",
+        "B.Sc. Data Science",
+        
+        # Commerce & Management
+        "B.Com",
+        "BBA",
+        "BMS - Bachelor of Management Studies",
+        "BAF - Bachelor of Accounting and Finance",
+        "BBI - Bachelor of Banking and Insurance",
+        "BFM - Bachelor of Financial Markets",
+        "BMM - Bachelor of Mass Media",
+        
+        # Other Professional
+        "B.Arch - Architecture",
+        "B.Des - Design",
+        "BCA - Bachelor of Computer Applications",
+        "MCA - Master of Computer Applications",
+        "MBA",
+        "M.Tech",
+        "M.E.",
+        "M.Sc. Computer Science",
+        "M.Sc. Information Technology",
+    ]
+    
+    def get(self, request):
+        query = request.query_params.get('q', '').lower().strip()
+        
+        if not query:
+            return Response({
+                'status': 'success',
+                'branches': self.ENGINEERING_BRANCHES[:20]
+            })
+        
+        # Filter branches matching the query
+        filtered = [
+            branch for branch in self.ENGINEERING_BRANCHES
+            if query in branch.lower()
+        ]
+        
+        return Response({
+            'status': 'success',
+            'branches': filtered[:20]
+        })
+
+
+class InterestsListView(APIView):
+    """
+    Get list of suggested interests for autocomplete.
+    
+    GET /api/auth/interests/
+    """
+    permission_classes = [AllowAny]
+    
+    SUGGESTED_INTERESTS = [
+        # Programming Languages
+        "Python", "JavaScript", "Java", "C++", "C", "Rust", "Go", "TypeScript",
+        "Kotlin", "Swift", "Ruby", "PHP", "R", "Scala", "Dart",
+        
+        # Web Development
+        "Web Development", "Frontend Development", "Backend Development",
+        "Full Stack Development", "React", "Angular", "Vue.js", "Next.js",
+        "Node.js", "Django", "Flask", "Spring Boot", "Express.js",
+        
+        # Data & AI
+        "Machine Learning", "Deep Learning", "Artificial Intelligence",
+        "Data Science", "Data Analytics", "Data Engineering",
+        "Natural Language Processing", "Computer Vision",
+        "TensorFlow", "PyTorch", "Pandas", "NumPy",
+        
+        # Cloud & DevOps
+        "Cloud Computing", "AWS", "Azure", "Google Cloud", "DevOps",
+        "Docker", "Kubernetes", "CI/CD", "Terraform", "Jenkins",
+        
+        # Mobile Development
+        "Mobile Development", "Android Development", "iOS Development",
+        "React Native", "Flutter", "Xamarin",
+        
+        # Database
+        "Databases", "SQL", "NoSQL", "MongoDB", "PostgreSQL", "MySQL", "Redis",
+        
+        # Security
+        "Cybersecurity", "Ethical Hacking", "Network Security",
+        "Penetration Testing", "Cryptography",
+        
+        # Other Tech
+        "Blockchain", "Web3", "Cryptocurrency", "Smart Contracts",
+        "Game Development", "Unity", "Unreal Engine",
+        "AR/VR", "Embedded Systems", "IoT",
+        
+        # Soft Skills
+        "System Design", "Software Architecture", "Problem Solving",
+        "Data Structures", "Algorithms", "Competitive Programming",
+        "Open Source", "Technical Writing", "UI/UX Design",
+    ]
+    
+    def get(self, request):
+        query = request.query_params.get('q', '').lower().strip()
+        
+        if not query:
+            return Response({
+                'status': 'success',
+                'interests': self.SUGGESTED_INTERESTS
+            })
+        
+        # Filter interests matching the query
+        filtered = [
+            interest for interest in self.SUGGESTED_INTERESTS
+            if query in interest.lower()
+        ]
+        
+        return Response({
+            'status': 'success',
+            'interests': filtered
+        })
 
 
 class LogoutView(APIView):

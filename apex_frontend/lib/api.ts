@@ -17,12 +17,25 @@ export const api = axios.create({
   timeout: 30000, // 30 second timeout
 });
 
+// Flag to prevent multiple refresh attempts
+let isRefreshing = false;
+let refreshSubscribers: ((token: string) => void)[] = [];
+
+const subscribeTokenRefresh = (callback: (token: string) => void) => {
+  refreshSubscribers.push(callback);
+};
+
+const onTokenRefreshed = (newToken: string) => {
+  refreshSubscribers.forEach(callback => callback(newToken));
+  refreshSubscribers = [];
+};
+
 // Request interceptor for logging and auth
 api.interceptors.request.use(
   (config) => {
     // Add auth token if available
     if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('apex_token');
+      const token = localStorage.getItem('apex_access_token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -35,10 +48,75 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor for error handling
+// Response interceptor for error handling and token refresh
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config;
+    
+    // If 401 and we haven't tried to refresh yet
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (typeof window !== 'undefined') {
+        const refreshToken = localStorage.getItem('apex_refresh_token');
+        
+        // If no refresh token, just reject
+        if (!refreshToken) {
+          console.error('API Error:', error.response?.data || error.message);
+          return Promise.reject(error);
+        }
+        
+        // If already refreshing, wait for the new token
+        if (isRefreshing) {
+          return new Promise((resolve) => {
+            subscribeTokenRefresh((newToken: string) => {
+              originalRequest.headers.Authorization = `Bearer ${newToken}`;
+              resolve(api(originalRequest));
+            });
+          });
+        }
+        
+        originalRequest._retry = true;
+        isRefreshing = true;
+        
+        try {
+          // Try to refresh the token
+          const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/auth/token/refresh/`, {
+            refresh: refreshToken
+          });
+          
+          const newAccessToken = response.data.access;
+          localStorage.setItem('apex_access_token', newAccessToken);
+          
+          // If we got a new refresh token, save it too
+          if (response.data.refresh) {
+            localStorage.setItem('apex_refresh_token', response.data.refresh);
+          }
+          
+          onTokenRefreshed(newAccessToken);
+          isRefreshing = false;
+          
+          // Retry the original request with new token
+          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+          return api(originalRequest);
+        } catch (refreshError) {
+          isRefreshing = false;
+          refreshSubscribers = [];
+          
+          // Refresh failed - clear tokens and redirect to login
+          localStorage.removeItem('apex_access_token');
+          localStorage.removeItem('apex_refresh_token');
+          localStorage.removeItem('apex_user');
+          
+          // Only redirect if in browser
+          if (typeof window !== 'undefined') {
+            window.location.href = '/login';
+          }
+          
+          return Promise.reject(refreshError);
+        }
+      }
+    }
+    
     console.error('API Error:', error.response?.data || error.message);
     return Promise.reject(error);
   }
@@ -58,14 +136,21 @@ export interface Course {
   category_display: string;
   difficulty: string;
   difficulty_display: string;
+  platform: string;
+  platform_display: string;
+  external_url: string | null;
   video_url: string | null;
   cover_image: string | null;
   cover_image_url: string | null;
+  thumbnail_url: string | null;
   tags: string;
   tags_list: string[];
   duration_hours: number;
   total_enrollments: number;
   average_rating: number;
+  syllabus?: string;
+  prerequisites?: string;
+  what_you_learn?: string;
   created_at: string;
 }
 
@@ -87,11 +172,22 @@ export interface CareerAnalysis {
   extracted_skills: string[];
   experience_level: string;
   suggested_categories: string[];
+  profile_summary?: string;
+  strengths?: string[];
   career_paths: {
     title: string;
     description: string;
+    salary_range?: string;
+    match_score?: number;
+    required_skills?: string[];
+    growth_potential?: string;
   }[];
-  skills_gap: string[];
+  skills_gap: {
+    skill: string;
+    importance: 'critical' | 'important' | 'nice_to_have';
+    reason: string;
+    related_roles: string[];
+  }[] | string[];  // Support both old and new format
   skills_text: string;
 }
 
@@ -100,6 +196,27 @@ export interface ChatResponse {
   question: string;
   response: string;
   suggestions: string[];
+  conversation_id?: string;
+  provider?: string;
+  model?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  model_used?: string;
+  tokens_used?: number;
+  response_time_ms?: number;
+  created_at: string;
+}
+
+export interface ChatConversation {
+  id: string;
+  title: string;
+  ai_provider: string;
+  created_at: string;
+  updated_at: string;
 }
 
 // ============================================
@@ -112,6 +229,8 @@ export interface ChatResponse {
 export async function getCourses(params?: {
   category?: string;
   difficulty?: string;
+  platform?: string;
+  free?: boolean;
   search?: string;
   ordering?: string;
 }): Promise<Course[]> {
@@ -132,6 +251,14 @@ export async function getCourse(id: string): Promise<Course> {
  */
 export async function getCategories(): Promise<{ value: string; label: string }[]> {
   const response = await api.get('/courses/categories/');
+  return response.data;
+}
+
+/**
+ * Get course platforms
+ */
+export async function getPlatforms(): Promise<{ value: string; label: string }[]> {
+  const response = await api.get('/courses/platforms/');
   return response.data;
 }
 
@@ -164,11 +291,49 @@ export async function getTextRecommendations(
 }
 
 /**
+ * Skill trend analysis for a single skill
+ */
+export interface SkillTrend {
+  skill: string;
+  demand_level: 'very_high' | 'high' | 'medium' | 'low';
+  demand_score: number;
+  trend: 'rising' | 'stable' | 'declining';
+  growth_rate: string;
+  avg_salary_impact: string;
+  job_openings: string;
+  top_companies: string[];
+  related_roles: string[];
+}
+
+/**
+ * Complete skill trends analysis
+ */
+export interface SkillTrendsAnalysis {
+  market_overview: string;
+  skill_analysis: SkillTrend[];
+  hot_skills: string[];
+  emerging_combinations: {
+    skills: string[];
+    value: string;
+  }[];
+  market_insights: string[];
+  recommendations: string[];
+  industry_demand: {
+    tech: number;
+    finance: number;
+    healthcare: number;
+    retail: number;
+    other: number;
+  };
+}
+
+/**
  * Upload resume for AI analysis
  */
 export async function uploadResume(file: File): Promise<{
   status: string;
   analysis: CareerAnalysis;
+  skill_trends: SkillTrendsAnalysis;
   recommended_courses: RecommendedCourse[];
 }> {
   const formData = new FormData();
@@ -187,13 +352,44 @@ export async function uploadResume(file: File): Promise<{
  */
 export async function chatWithGuide(
   question: string,
-  context?: string
+  context?: string,
+  conversationId?: string
 ): Promise<ChatResponse> {
   const response = await api.post('/chat-guide/', {
     question,
     context,
+    conversation_id: conversationId,
   });
   return response.data;
+}
+
+/**
+ * Get all chat conversations for the user
+ */
+export async function getChatConversations(): Promise<ChatConversation[]> {
+  const response = await api.get('/chat-history/');
+  return response.data.conversations || [];
+}
+
+/**
+ * Get messages for a specific conversation
+ */
+export async function getChatMessages(conversationId: string): Promise<{
+  conversation: ChatConversation;
+  messages: ChatMessage[];
+}> {
+  const response = await api.get(`/chat-history/${conversationId}/`);
+  return {
+    conversation: response.data.conversation,
+    messages: response.data.messages || [],
+  };
+}
+
+/**
+ * Delete a chat conversation
+ */
+export async function deleteChatConversation(conversationId: string): Promise<void> {
+  await api.delete(`/chat-history/${conversationId}/`);
 }
 
 /**
@@ -244,7 +440,7 @@ export async function validateFace(imageFile: File): Promise<{
   const formData = new FormData();
   formData.append('image', imageFile);
   
-  const response = await api.post('/validate-face/', formData, {
+  const response = await api.post('/auth/validate-face/', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
@@ -263,6 +459,36 @@ export async function saveProfilePicture(croppedFace: string): Promise<{
   const response = await api.post('/save-profile-pic/', {
     cropped_face: croppedFace,
   });
+  return response.data;
+}
+
+/**
+ * Upload display picture (user avatar)
+ */
+export async function uploadDisplayPicture(imageFile: File): Promise<{
+  status: string;
+  message: string;
+  display_picture_url: string;
+}> {
+  const formData = new FormData();
+  formData.append('image', imageFile);
+  
+  const response = await api.post('/auth/display-picture/', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data;
+}
+
+/**
+ * Remove display picture
+ */
+export async function removeDisplayPicture(): Promise<{
+  status: string;
+  message: string;
+}> {
+  const response = await api.delete('/auth/display-picture/');
   return response.data;
 }
 

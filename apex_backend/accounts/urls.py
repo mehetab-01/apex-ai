@@ -25,6 +25,12 @@ urlpatterns = [
     
     # Profile
     path('profile/', views.UserProfileView.as_view(), name='user_profile'),
+    path('display-picture/', views.DisplayPictureUploadView.as_view(), name='display_picture'),
+    
+    # Autocomplete endpoints
+    path('colleges/', views.CollegeAutocompleteView.as_view(), name='college_autocomplete'),
+    path('branches/', views.BranchAutocompleteView.as_view(), name='branch_autocomplete'),
+    path('interests/', views.InterestsListView.as_view(), name='interests_list'),
     
     # Token management
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
