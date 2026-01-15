@@ -51,6 +51,23 @@ class Course(models.Model):
         ('expert', 'Expert'),
     ]
     
+    PLATFORM_CHOICES = [
+        ('apex', 'Apex'),
+        ('udemy', 'Udemy'),
+        ('youtube', 'YouTube'),
+        ('coursera', 'Coursera'),
+        ('infosys', 'Infosys Springboard'),
+        ('nptel', 'NPTEL'),
+        ('cisco', 'Cisco Networking Academy'),
+        ('cyfrin', 'Cyfrin Updraft'),
+        ('freecodecamp', 'freeCodeCamp'),
+        ('hackerrank', 'HackerRank'),
+        ('codechef', 'CodeChef'),
+        ('leetcode', 'LeetCode'),
+        ('edx', 'edX'),
+        ('mit', 'MIT OpenCourseWare'),
+    ]
+    
     # Primary identifier
     id = models.UUIDField(
         primary_key=True,
@@ -111,6 +128,45 @@ class Course(models.Model):
         blank=True,
         null=True,
         help_text="Course cover image"
+    )
+    
+    # External platform fields
+    platform = models.CharField(
+        max_length=50,
+        choices=PLATFORM_CHOICES,
+        default='apex',
+        help_text="Platform where the course is hosted"
+    )
+    
+    external_url = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text="Link to the course on external platform"
+    )
+    
+    # Thumbnail URL for external course images
+    thumbnail_url = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text="URL to the course thumbnail image"
+    )
+    
+    # Course content details
+    syllabus = models.TextField(
+        blank=True,
+        help_text="Course syllabus or curriculum outline"
+    )
+    
+    prerequisites = models.TextField(
+        blank=True,
+        help_text="Prerequisites for this course"
+    )
+    
+    what_you_learn = models.TextField(
+        blank=True,
+        help_text="Key learning outcomes"
     )
     
     # Additional metadata for recommendations

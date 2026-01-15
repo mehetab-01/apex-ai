@@ -14,6 +14,7 @@ urlpatterns = [
     path('courses/', views.CourseListCreateView.as_view(), name='course_list'),
     path('courses/<uuid:pk>/', views.CourseDetailView.as_view(), name='course_detail'),
     path('courses/categories/', views.CourseCategoriesView.as_view(), name='course_categories'),
+    path('courses/platforms/', views.CoursePlatformsView.as_view(), name='course_platforms'),
     
     # Recommendations
     path('recommend/', views.RecommendationView.as_view(), name='recommend'),
@@ -39,7 +40,6 @@ urlpatterns = [
     # Student Profile
     path('profile/', views.StudentProfileView.as_view(), name='student_profile'),
     
-    # Face Validation for Profile Picture
-    path('validate-face/', views.FaceValidationView.as_view(), name='validate_face'),
+    # Save Profile Picture (for demo purposes)
     path('save-profile-pic/', views.SaveProfilePictureView.as_view(), name='save_profile_pic'),
 ]

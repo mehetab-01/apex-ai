@@ -33,6 +33,10 @@ class CourseListSerializer(serializers.ModelSerializer):
         source='get_difficulty_display',
         read_only=True
     )
+    platform_display = serializers.CharField(
+        source='get_platform_display',
+        read_only=True
+    )
     cover_image_url = serializers.SerializerMethodField()
     
     class Meta:
@@ -46,6 +50,10 @@ class CourseListSerializer(serializers.ModelSerializer):
             'category_display',
             'difficulty',
             'difficulty_display',
+            'platform',
+            'platform_display',
+            'external_url',
+            'thumbnail_url',
             'duration_hours',
             'average_rating',
             'total_enrollments',
@@ -77,6 +85,10 @@ class CourseDetailSerializer(serializers.ModelSerializer):
         source='get_difficulty_display',
         read_only=True
     )
+    platform_display = serializers.CharField(
+        source='get_platform_display',
+        read_only=True
+    )
     tags_list = serializers.ListField(
         source='get_tags_list',
         read_only=True
@@ -95,6 +107,10 @@ class CourseDetailSerializer(serializers.ModelSerializer):
             'category_display',
             'difficulty',
             'difficulty_display',
+            'platform',
+            'platform_display',
+            'external_url',
+            'thumbnail_url',
             'video_url',
             'cover_image',
             'cover_image_url',
@@ -103,6 +119,9 @@ class CourseDetailSerializer(serializers.ModelSerializer):
             'duration_hours',
             'total_enrollments',
             'average_rating',
+            'syllabus',
+            'prerequisites',
+            'what_you_learn',
             'is_published',
             'created_at',
             'updated_at',
@@ -272,11 +291,20 @@ class RecommendationResponseSerializer(serializers.Serializer):
     title = serializers.CharField()
     description = serializers.CharField()
     category = serializers.CharField()
+    category_display = serializers.CharField(required=False, allow_blank=True)
     difficulty = serializers.CharField()
+    difficulty_display = serializers.CharField(required=False, allow_blank=True)
     instructor = serializers.CharField()
     price = serializers.FloatField()
-    duration_hours = serializers.IntegerField()
+    duration_hours = serializers.IntegerField(required=False, default=0)
     average_rating = serializers.FloatField()
+    total_enrollments = serializers.IntegerField(required=False, default=0)
+    platform = serializers.CharField(required=False, allow_blank=True)
+    platform_display = serializers.CharField(required=False, allow_blank=True)
+    external_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    thumbnail_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    cover_image_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    tags = serializers.CharField(required=False, allow_blank=True)
     similarity_score = serializers.FloatField()
     match_percentage = serializers.FloatField()
     cover_image = serializers.CharField(allow_blank=True)
