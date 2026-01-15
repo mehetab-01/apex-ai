@@ -54,16 +54,18 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 group">
+          <Link href="/" className="flex items-center gap-2 group">
             <motion.div
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className="relative"
             >
-              <div className="absolute inset-0 bg-neon-cyan/20 rounded-xl blur-lg group-hover:bg-neon-cyan/30 transition-colors" />
-              <div className="relative p-2.5 rounded-xl bg-gradient-to-br from-neon-cyan to-neon-cyan/70">
-                <GraduationCap className="w-5 h-5 text-black" />
-              </div>
+              <div className="absolute inset-0 bg-neon-cyan/20 rounded-full blur-lg group-hover:bg-neon-cyan/30 transition-colors" />
+              <img 
+                src="https://i.ibb.co/ynDNpLjn/apex-learning.png" 
+                alt="Apex Learning" 
+                className="relative w-10 h-10 rounded-full object-contain"
+              />
             </motion.div>
             <div className="flex flex-col">
               <span className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">

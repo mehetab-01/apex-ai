@@ -19,6 +19,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
+      <head>
+        <link rel="icon" href="https://i.ibb.co/ynDNpLjn/apex-learning.png" type="image/png" />
+        <link rel="apple-touch-icon" href="https://i.ibb.co/ynDNpLjn/apex-learning.png" />
+      </head>
       <body className={`${inter.className} min-h-screen bg-apex-dark`}>
         {/* Background Effects */}
         <div className="fixed inset-0 cyber-grid pointer-events-none opacity-30" />
