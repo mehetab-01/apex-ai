@@ -62,5 +62,5 @@ typing_extensions==4.15.0
 tzdata==2025.3
 uritemplate==4.2.0
 urllib3==2.6.3
-sendinblue
+sib-api-v3-sdk
 twilio
