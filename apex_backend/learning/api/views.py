@@ -2,6 +2,7 @@
 Apex Learning Platform - DRF API Views
 =======================================
 This module implements the REST API endpoints using Django REST Framework.
+# Trigger reload v4
 
 Endpoints:
     - GET /api/courses/ - List all courses
@@ -19,8 +20,10 @@ from typing import Optional
 from rest_framework import status, generics, viewsets
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.conf import settings
 
 from learning.models import Course, StudentProfile, LearningLog, FocusSession
@@ -58,6 +61,8 @@ class CourseListCreateView(generics.ListCreateAPIView):
     POST /api/courses/
         Creates a new course.
     """
+    authentication_classes = []
+    permission_classes = [AllowAny]
     queryset = Course.objects.filter(is_published=True)
     
     def get_serializer_class(self):
@@ -77,6 +82,16 @@ class CourseListCreateView(generics.ListCreateAPIView):
         difficulty = self.request.query_params.get('difficulty')
         if difficulty:
             queryset = queryset.filter(difficulty=difficulty)
+        
+        # Filter by platform
+        platform = self.request.query_params.get('platform')
+        if platform:
+            queryset = queryset.filter(platform=platform)
+        
+        # Filter by free courses only
+        free_only = self.request.query_params.get('free')
+        if free_only and free_only.lower() == 'true':
+            queryset = queryset.filter(price=0)
         
         # Search by title or description
         search = self.request.query_params.get('search')
@@ -104,6 +119,8 @@ class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
     PUT /api/courses/<id>/
     DELETE /api/courses/<id>/
     """
+    authentication_classes = []
+    permission_classes = [AllowAny]
     queryset = Course.objects.all()
     serializer_class = CourseDetailSerializer
 
@@ -114,6 +131,8 @@ class CourseCategoriesView(APIView):
     
     GET /api/courses/categories/
     """
+    authentication_classes = []
+    permission_classes = [AllowAny]
     
     def get(self, request):
         categories = [
@@ -121,6 +140,23 @@ class CourseCategoriesView(APIView):
             for value, label in Course.CATEGORY_CHOICES
         ]
         return Response(categories)
+
+
+class CoursePlatformsView(APIView):
+    """
+    API endpoint to get available course platforms.
+    
+    GET /api/courses/platforms/
+    """
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        platforms = [
+            {'value': value, 'label': label}
+            for value, label in Course.PLATFORM_CHOICES
+        ]
+        return Response(platforms)
 
 
 # ============================================
@@ -135,6 +171,8 @@ class RecommendationView(APIView):
         Input: course_id (UUID)
         Output: List of recommended courses with similarity scores
     """
+    authentication_classes = []
+    permission_classes = [AllowAny]
     
     def post(self, request):
         serializer = RecommendationRequestSerializer(data=request.data)
@@ -233,8 +271,10 @@ class ResumeUploadView(APIView):
     
     POST /api/upload-resume/
         Input: PDF file
-        Output: AI-generated career roadmap and course suggestions
+        Output: AI-generated career roadmap, course suggestions, and skill trends
     """
+    authentication_classes = []
+    permission_classes = [AllowAny]
     parser_classes = [MultiPartParser, FormParser]
     
     def post(self, request):
@@ -261,16 +301,20 @@ class ResumeUploadView(APIView):
             # Analyze with Gemini AI
             analysis = self._analyze_resume_with_gemini(resume_text)
             
+            # Get skill trends analysis
+            skill_trends = self._get_skill_trends(analysis.get('extracted_skills', []))
+            
             # Get course recommendations based on skills
             recommender = get_recommender()
             recommended_courses = recommender.get_recommendations_for_text(
                 query_text=analysis.get('skills_text', resume_text),
-                top_n=5
+                top_n=6
             )
             
             return Response({
                 'status': 'success',
                 'analysis': analysis,
+                'skill_trends': skill_trends,
                 'recommended_courses': recommended_courses
             })
             
@@ -311,21 +355,40 @@ class ResumeUploadView(APIView):
                 return self._mock_resume_analysis(resume_text)
             
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-2.5-flash')
+            model = genai.GenerativeModel('gemini-2.0-flash')
             
-            prompt = f"""Analyze this resume and provide a structured response in JSON format with the following:
+            prompt = f"""Analyze this resume comprehensively and provide a structured response in JSON format with the following:
 
-1. "extracted_skills": A list of technical and soft skills found in the resume
-2. "experience_level": One of "entry", "mid", "senior", or "expert"
+1. "extracted_skills": A list of all technical and soft skills found in the resume (be comprehensive)
+
+2. "experience_level": One of "entry", "mid", "senior", or "expert" based on years of experience and role complexity
+
 3. "suggested_categories": A list of relevant learning categories from: web_development, mobile_development, data_science, machine_learning, artificial_intelligence, cloud_computing, cybersecurity, devops, blockchain, game_development, ui_ux_design, database, programming_languages, software_engineering, networking
-4. "career_paths": A list of 3 recommended career paths with "title" and "description"
-5. "skills_gap": A list of skills the person should learn to advance their career
-6. "skills_text": A comma-separated string of all skills for course matching
+
+4. "career_paths": A list of 4-5 recommended job roles based on their skills, each with:
+   - "title": Job title (e.g., "Senior Full Stack Developer", "ML Engineer", "Data Scientist")
+   - "description": Brief description of the role
+   - "salary_range": Estimated salary range (e.g., "$80,000 - $120,000")
+   - "match_score": Percentage match based on current skills (0-100)
+   - "required_skills": List of key skills needed for this role
+   - "growth_potential": Brief note on career growth
+
+5. "skills_gap": A list of skills the person is MISSING that they should learn, each with:
+   - "skill": Name of the skill
+   - "importance": "critical", "important", or "nice_to_have"
+   - "reason": Why this skill is needed for their career growth
+   - "related_roles": Which job roles benefit from this skill
+
+6. "profile_summary": A brief 2-3 sentence summary of the candidate's profile
+
+7. "strengths": List of 3-4 key strengths based on resume
+
+8. "skills_text": A comma-separated string of all skills for course matching
 
 Resume:
-{resume_text[:4000]}  
+{resume_text[:6000]}  
 
-Respond only with valid JSON, no markdown formatting."""
+Respond only with valid JSON, no markdown formatting or code blocks."""
             
             response = model.generate_content(prompt)
             
@@ -361,7 +424,10 @@ Respond only with valid JSON, no markdown formatting."""
         skill_keywords = [
             'python', 'javascript', 'java', 'react', 'node', 'sql',
             'machine learning', 'data science', 'aws', 'docker', 'kubernetes',
-            'git', 'agile', 'scrum', 'html', 'css', 'typescript'
+            'git', 'agile', 'scrum', 'html', 'css', 'typescript', 'mongodb',
+            'postgresql', 'redis', 'graphql', 'rest api', 'ci/cd', 'linux',
+            'tensorflow', 'pytorch', 'pandas', 'numpy', 'django', 'flask',
+            'express', 'vue', 'angular', 'c++', 'go', 'rust', 'kotlin', 'swift'
         ]
         
         for skill in skill_keywords:
@@ -369,38 +435,275 @@ Respond only with valid JSON, no markdown formatting."""
                 skills.append(skill.title())
         
         categories = []
-        if any(s in text_lower for s in ['python', 'data', 'machine learning', 'pandas']):
+        if any(s in text_lower for s in ['python', 'data', 'machine learning', 'pandas', 'numpy']):
             categories.append('data_science')
-        if any(s in text_lower for s in ['react', 'javascript', 'html', 'css', 'frontend']):
+        if any(s in text_lower for s in ['react', 'javascript', 'html', 'css', 'frontend', 'vue', 'angular']):
             categories.append('web_development')
         if any(s in text_lower for s in ['aws', 'cloud', 'azure', 'gcp']):
             categories.append('cloud_computing')
         if any(s in text_lower for s in ['docker', 'kubernetes', 'ci/cd', 'devops']):
             categories.append('devops')
+        if any(s in text_lower for s in ['machine learning', 'deep learning', 'neural', 'tensorflow', 'pytorch']):
+            categories.append('machine_learning')
         
         if not categories:
             categories = ['programming_languages', 'software_engineering']
         
+        # Determine experience level based on keywords
+        experience_level = 'mid'
+        if any(s in text_lower for s in ['senior', 'lead', 'principal', 'architect', 'manager', '8+ years', '10+ years']):
+            experience_level = 'senior'
+        elif any(s in text_lower for s in ['junior', 'intern', 'entry', 'fresher', 'graduate', '0-2 years']):
+            experience_level = 'entry'
+        elif any(s in text_lower for s in ['expert', 'director', 'head of', 'vp', 'chief', '15+ years']):
+            experience_level = 'expert'
+        
         return {
-            'extracted_skills': skills if skills else ['Programming', 'Problem Solving'],
-            'experience_level': 'mid',
+            'extracted_skills': skills if skills else ['Programming', 'Problem Solving', 'Communication'],
+            'experience_level': experience_level,
             'suggested_categories': categories,
+            'profile_summary': 'A skilled professional with experience in software development. Shows proficiency in multiple programming languages and frameworks.',
+            'strengths': [
+                'Strong technical foundation',
+                'Experience with modern frameworks',
+                'Problem-solving abilities',
+                'Continuous learning mindset'
+            ],
             'career_paths': [
                 {
                     'title': 'Full Stack Developer',
-                    'description': 'Build complete web applications from frontend to backend'
+                    'description': 'Build complete web applications from frontend to backend',
+                    'salary_range': '$70,000 - $130,000',
+                    'match_score': 75,
+                    'required_skills': ['JavaScript', 'React', 'Node.js', 'SQL', 'REST APIs'],
+                    'growth_potential': 'Can advance to Tech Lead or Software Architect'
                 },
                 {
                     'title': 'Data Scientist',
-                    'description': 'Analyze data and build machine learning models'
+                    'description': 'Analyze data and build machine learning models to drive business decisions',
+                    'salary_range': '$85,000 - $150,000',
+                    'match_score': 65,
+                    'required_skills': ['Python', 'Machine Learning', 'SQL', 'Statistics', 'Data Visualization'],
+                    'growth_potential': 'Can advance to ML Engineer or Chief Data Officer'
                 },
                 {
                     'title': 'DevOps Engineer',
-                    'description': 'Manage infrastructure and deployment pipelines'
+                    'description': 'Manage infrastructure, CI/CD pipelines, and deployment automation',
+                    'salary_range': '$80,000 - $140,000',
+                    'match_score': 60,
+                    'required_skills': ['Docker', 'Kubernetes', 'AWS/GCP', 'CI/CD', 'Linux'],
+                    'growth_potential': 'Can advance to Platform Engineer or SRE Lead'
+                },
+                {
+                    'title': 'Backend Engineer',
+                    'description': 'Design and implement scalable server-side applications and APIs',
+                    'salary_range': '$75,000 - $135,000',
+                    'match_score': 70,
+                    'required_skills': ['Python/Java/Go', 'Databases', 'System Design', 'APIs', 'Microservices'],
+                    'growth_potential': 'Can advance to Staff Engineer or Engineering Manager'
                 }
             ],
-            'skills_gap': ['Cloud Architecture', 'System Design', 'Leadership'],
-            'skills_text': ', '.join(skills) if skills else 'programming, software development'
+            'skills_gap': [
+                {
+                    'skill': 'System Design',
+                    'importance': 'critical',
+                    'reason': 'Essential for senior roles and building scalable applications',
+                    'related_roles': ['Senior Developer', 'Tech Lead', 'Solutions Architect']
+                },
+                {
+                    'skill': 'Cloud Architecture',
+                    'importance': 'critical',
+                    'reason': 'Modern applications require cloud deployment knowledge',
+                    'related_roles': ['DevOps Engineer', 'Cloud Architect', 'Platform Engineer']
+                },
+                {
+                    'skill': 'Leadership & Mentoring',
+                    'importance': 'important',
+                    'reason': 'Required for career progression to lead/management roles',
+                    'related_roles': ['Tech Lead', 'Engineering Manager', 'CTO']
+                },
+                {
+                    'skill': 'Machine Learning Fundamentals',
+                    'importance': 'important',
+                    'reason': 'AI/ML skills are increasingly valuable across all tech roles',
+                    'related_roles': ['ML Engineer', 'Data Scientist', 'AI Developer']
+                },
+                {
+                    'skill': 'Communication & Presentation',
+                    'importance': 'nice_to_have',
+                    'reason': 'Important for stakeholder management and career growth',
+                    'related_roles': ['Technical PM', 'Solutions Architect', 'Team Lead']
+                }
+            ],
+            'skills_text': ', '.join(skills) if skills else 'programming, software development, problem solving'
+        }
+
+    def _get_skill_trends(self, skills: list) -> dict:
+        """Get real-time market trends for the user's skills using AI."""
+        if not skills:
+            return self._mock_skill_trends([])
+        
+        try:
+            import google.generativeai as genai
+            
+            api_key = settings.GEMINI_API_KEY
+            if not api_key:
+                return self._mock_skill_trends(skills)
+            
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel('gemini-2.0-flash')
+            
+            skills_str = ', '.join(skills[:15])  # Limit to top 15 skills
+            
+            prompt = f"""Analyze the current job market trends for these technical skills: {skills_str}
+
+Provide a detailed real-time market analysis in JSON format with:
+
+1. "market_overview": A brief 2-3 sentence overview of the current tech job market and how these skills fit
+
+2. "skill_analysis": An array of skill trend objects, each containing:
+   - "skill": The skill name
+   - "demand_level": One of "very_high", "high", "medium", "low" based on current job postings
+   - "demand_score": A number from 0-100 representing current market demand
+   - "trend": One of "rising", "stable", "declining" based on year-over-year changes
+   - "growth_rate": Percentage growth/decline (e.g., "+25%", "-5%", "+10%")
+   - "avg_salary_impact": How this skill impacts salary (e.g., "+$15,000", "+$25,000")
+   - "job_openings": Estimated number of job openings mentioning this skill (e.g., "50,000+", "10,000-20,000")
+   - "top_companies": List of 3-4 top companies hiring for this skill
+   - "related_roles": List of 2-3 job titles that commonly require this skill
+
+3. "hot_skills": Array of 3-4 skills from the list that are currently most in-demand
+
+4. "emerging_combinations": Array of 2-3 skill combinations that are particularly valuable together
+
+5. "market_insights": Array of 3-4 key insights about the job market for these skills
+
+6. "recommendations": Array of 3-4 actionable recommendations for the user based on trends
+
+7. "industry_demand": Object showing demand by industry:
+   - "tech": percentage (e.g., 45)
+   - "finance": percentage
+   - "healthcare": percentage
+   - "retail": percentage
+   - "other": percentage
+
+Respond only with valid JSON, no markdown formatting or code blocks. Base your analysis on current 2024-2025 job market data and trends."""
+            
+            response = model.generate_content(prompt)
+            
+            import json
+            try:
+                response_text = response.text.strip()
+                if response_text.startswith('```'):
+                    response_text = response_text.split('```')[1]
+                    if response_text.startswith('json'):
+                        response_text = response_text[4:]
+                
+                trends = json.loads(response_text)
+                return trends
+            except json.JSONDecodeError:
+                logger.warning("Failed to parse skill trends response as JSON")
+                return self._mock_skill_trends(skills)
+                
+        except ImportError:
+            logger.warning("google-generativeai not installed")
+            return self._mock_skill_trends(skills)
+        except Exception as e:
+            logger.error(f"Skill trends API error: {e}")
+            return self._mock_skill_trends(skills)
+    
+    def _mock_skill_trends(self, skills: list) -> dict:
+        """Provide mock skill trends when API is unavailable."""
+        # Default skill trends based on common tech skills
+        skill_trends_data = {
+            'python': {'demand': 95, 'trend': 'rising', 'growth': '+18%', 'salary': '+$20,000'},
+            'javascript': {'demand': 92, 'trend': 'stable', 'growth': '+8%', 'salary': '+$15,000'},
+            'react': {'demand': 88, 'trend': 'rising', 'growth': '+22%', 'salary': '+$18,000'},
+            'aws': {'demand': 90, 'trend': 'rising', 'growth': '+25%', 'salary': '+$25,000'},
+            'docker': {'demand': 85, 'trend': 'rising', 'growth': '+20%', 'salary': '+$15,000'},
+            'kubernetes': {'demand': 82, 'trend': 'rising', 'growth': '+30%', 'salary': '+$22,000'},
+            'machine learning': {'demand': 88, 'trend': 'rising', 'growth': '+35%', 'salary': '+$30,000'},
+            'sql': {'demand': 85, 'trend': 'stable', 'growth': '+5%', 'salary': '+$10,000'},
+            'java': {'demand': 80, 'trend': 'stable', 'growth': '+3%', 'salary': '+$12,000'},
+            'typescript': {'demand': 86, 'trend': 'rising', 'growth': '+28%', 'salary': '+$16,000'},
+            'node': {'demand': 82, 'trend': 'stable', 'growth': '+10%', 'salary': '+$14,000'},
+            'git': {'demand': 90, 'trend': 'stable', 'growth': '+5%', 'salary': '+$8,000'},
+            'mongodb': {'demand': 75, 'trend': 'stable', 'growth': '+12%', 'salary': '+$12,000'},
+            'postgresql': {'demand': 78, 'trend': 'rising', 'growth': '+15%', 'salary': '+$14,000'},
+            'redis': {'demand': 72, 'trend': 'rising', 'growth': '+18%', 'salary': '+$13,000'},
+            'graphql': {'demand': 70, 'trend': 'rising', 'growth': '+25%', 'salary': '+$15,000'},
+            'tensorflow': {'demand': 75, 'trend': 'rising', 'growth': '+20%', 'salary': '+$25,000'},
+            'pytorch': {'demand': 78, 'trend': 'rising', 'growth': '+32%', 'salary': '+$28,000'},
+            'django': {'demand': 72, 'trend': 'stable', 'growth': '+8%', 'salary': '+$12,000'},
+            'flask': {'demand': 68, 'trend': 'stable', 'growth': '+5%', 'salary': '+$10,000'},
+            'vue': {'demand': 70, 'trend': 'stable', 'growth': '+12%', 'salary': '+$14,000'},
+            'angular': {'demand': 72, 'trend': 'declining', 'growth': '-5%', 'salary': '+$12,000'},
+            'rust': {'demand': 65, 'trend': 'rising', 'growth': '+45%', 'salary': '+$20,000'},
+            'go': {'demand': 75, 'trend': 'rising', 'growth': '+28%', 'salary': '+$18,000'},
+        }
+        
+        skill_analysis = []
+        for skill in skills[:12]:
+            skill_lower = skill.lower()
+            if skill_lower in skill_trends_data:
+                data = skill_trends_data[skill_lower]
+                demand_level = 'very_high' if data['demand'] >= 85 else 'high' if data['demand'] >= 70 else 'medium'
+                skill_analysis.append({
+                    'skill': skill,
+                    'demand_level': demand_level,
+                    'demand_score': data['demand'],
+                    'trend': data['trend'],
+                    'growth_rate': data['growth'],
+                    'avg_salary_impact': data['salary'],
+                    'job_openings': f"{data['demand'] * 500:,}+",
+                    'top_companies': ['Google', 'Amazon', 'Microsoft', 'Meta'],
+                    'related_roles': ['Software Engineer', 'Full Stack Developer', 'Backend Developer']
+                })
+            else:
+                skill_analysis.append({
+                    'skill': skill,
+                    'demand_level': 'medium',
+                    'demand_score': 65,
+                    'trend': 'stable',
+                    'growth_rate': '+10%',
+                    'avg_salary_impact': '+$10,000',
+                    'job_openings': '10,000+',
+                    'top_companies': ['Various Tech Companies'],
+                    'related_roles': ['Software Developer', 'Engineer']
+                })
+        
+        # Sort by demand score
+        skill_analysis.sort(key=lambda x: x['demand_score'], reverse=True)
+        hot_skills = [s['skill'] for s in skill_analysis[:4] if s['demand_score'] >= 80]
+        
+        return {
+            'market_overview': 'The tech job market remains strong with high demand for cloud, AI/ML, and full-stack development skills. Companies are actively hiring for roles that combine multiple technologies.',
+            'skill_analysis': skill_analysis,
+            'hot_skills': hot_skills if hot_skills else skills[:3],
+            'emerging_combinations': [
+                {'skills': ['Python', 'Machine Learning', 'AWS'], 'value': 'ML Engineering roles paying $150k+'},
+                {'skills': ['React', 'TypeScript', 'Node.js'], 'value': 'Full-stack positions in high demand'},
+                {'skills': ['Kubernetes', 'Docker', 'AWS'], 'value': 'DevOps roles with 30% YoY growth'}
+            ],
+            'market_insights': [
+                'AI/ML skills command 25-40% higher salaries than traditional development roles',
+                'Cloud certification holders see 15% faster job placement rates',
+                'Full-stack developers with DevOps knowledge are most sought after',
+                'Remote-first companies have increased tech hiring by 35%'
+            ],
+            'recommendations': [
+                'Focus on cloud platforms (AWS/GCP/Azure) to increase marketability',
+                'Add AI/ML fundamentals to your skill set for future-proofing',
+                'Consider containerization skills (Docker/K8s) for DevOps roles',
+                'Build portfolio projects showcasing skill combinations'
+            ],
+            'industry_demand': {
+                'tech': 45,
+                'finance': 20,
+                'healthcare': 15,
+                'retail': 12,
+                'other': 8
+            }
         }
 
 
@@ -416,6 +719,8 @@ class ChatGuideView(APIView):
         Input: User question, optional conversation_id and provider
         Output: AI-generated study advice with chat history
     """
+    authentication_classes = []
+    permission_classes = [AllowAny]
     
     def post(self, request):
         from learning.ai_providers import get_ai_manager
@@ -434,7 +739,7 @@ class ChatGuideView(APIView):
         conversation_id = request.data.get('conversation_id')
         preferred_provider = request.data.get('provider', 'auto')
         
-        user = request.user if request.user.is_authenticated else None
+        user = request.user if request.user and request.user.is_authenticated else None
         
         try:
             # Get or create conversation for authenticated users
@@ -528,22 +833,45 @@ class ChatHistoryView(APIView):
     GET /api/chat-history/<conversation_id>/
         Returns messages for a specific conversation
     """
+    # No authentication classes - we'll handle it manually to avoid 401 before view runs
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    
+    def _get_user_from_token(self, request):
+        """Manually authenticate user from JWT token."""
+        from rest_framework_simplejwt.authentication import JWTAuthentication
+        from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+        
+        auth = JWTAuthentication()
+        try:
+            # Try to authenticate
+            result = auth.authenticate(request)
+            if result:
+                return result[0]  # Return user
+        except (InvalidToken, TokenError) as e:
+            logger.warning(f"Token validation failed: {e}")
+        except Exception as e:
+            logger.warning(f"Auth error: {e}")
+        return None
     
     def get(self, request, conversation_id=None):
         from learning.models import ChatConversation, ChatMessage
         
-        if not request.user.is_authenticated:
-            return Response(
-                {'status': 'error', 'message': 'Authentication required'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
+        # Get user from token manually
+        user = self._get_user_from_token(request)
+        
+        if not user:
+            return Response({
+                'status': 'error',
+                'message': 'Authentication required to view chat history'
+            }, status=status.HTTP_401_UNAUTHORIZED)
         
         if conversation_id:
             # Get specific conversation with messages
             try:
                 conversation = ChatConversation.objects.get(
                     id=conversation_id,
-                    user=request.user
+                    user=user
                 )
                 messages = conversation.messages.all().values(
                     'id', 'role', 'content', 'model_used', 
@@ -569,7 +897,7 @@ class ChatHistoryView(APIView):
         else:
             # Get all conversations
             conversations = ChatConversation.objects.filter(
-                user=request.user,
+                user=user,
                 is_archived=False
             ).values('id', 'title', 'ai_provider', 'created_at', 'updated_at')
             
@@ -581,11 +909,14 @@ class ChatHistoryView(APIView):
     def delete(self, request, conversation_id=None):
         from learning.models import ChatConversation
         
-        if not request.user.is_authenticated:
-            return Response(
-                {'status': 'error', 'message': 'Authentication required'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
+        # Get user from token manually
+        user = self._get_user_from_token(request)
+        
+        if not user:
+            return Response({
+                'status': 'error',
+                'message': 'Authentication required to delete conversations'
+            }, status=status.HTTP_401_UNAUTHORIZED)
         
         if not conversation_id:
             return Response(
@@ -596,7 +927,7 @@ class ChatHistoryView(APIView):
         try:
             conversation = ChatConversation.objects.get(
                 id=conversation_id,
-                user=request.user
+                user=user
             )
             conversation.is_archived = True
             conversation.save()

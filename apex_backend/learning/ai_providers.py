@@ -146,9 +146,17 @@ class GroqProvider(AIProvider):
         try:
             import requests
             
-            system_prompt = """You are an expert AI learning advisor for Apex, an advanced e-learning platform.
-Your role is to provide helpful, encouraging, and practical study advice.
-Keep responses concise but informative. Be friendly and professional."""
+            system_prompt = """You are an AI learning advisor for Apex e-learning platform.
+
+RULES:
+- Be CONCISE and direct - aim for 2-4 short paragraphs max
+- Use bullet points for lists (max 3-5 items)
+- No lengthy explanations - get straight to the point
+- Each paragraph should be 1-2 sentences
+- Give actionable advice, not general fluff
+- Add blank lines between paragraphs for readability
+
+Keep responses brief but helpful."""
             
             if context:
                 system_prompt += f"\n\nAdditional context: {context}"
