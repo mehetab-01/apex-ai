@@ -13,9 +13,11 @@ RUN npm install --legacy-peer-deps
 FROM node:18-alpine AS builder
 WORKDIR /app
 
-# Accept build arg for API URL
+# Accept build args
 ARG NEXT_PUBLIC_API_URL=https://apex.tabcrypt.in
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

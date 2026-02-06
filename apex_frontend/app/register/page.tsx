@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import Script from "next/script";
 import { useRouter } from "next/navigation";
 import {
   Mail,
@@ -195,9 +196,7 @@ export default function RegisterPage() {
             if (data.status === "error") {
               setError(data.message || "Google sign up failed");
             } else {
-              localStorage.setItem("apex_access_token", data.tokens.access);
-              localStorage.setItem("apex_refresh_token", data.tokens.refresh);
-              localStorage.setItem("apex_user", JSON.stringify(data.user));
+              login(data.user, data.tokens.access, data.tokens.refresh);
               
               // New users go to onboarding
               router.push("/onboarding");
@@ -556,7 +555,7 @@ export default function RegisterPage() {
       </motion.div>
 
       {/* Google Sign-In Script */}
-      <script src="https://accounts.google.com/gsi/client" async defer />
+      <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" />
     </div>
   );
 }

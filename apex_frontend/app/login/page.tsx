@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import Script from "next/script";
 import { useRouter } from "next/navigation";
 import {
   Mail,
@@ -521,7 +522,7 @@ export default function LoginPage() {
       </motion.div>
 
       {/* Google Sign-In Script */}
-      <script src="https://accounts.google.com/gsi/client" async defer />
+      <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" />
     </div>
   );
 }

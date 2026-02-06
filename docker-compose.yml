@@ -33,10 +33,12 @@ services:
       dockerfile: Dockerfile
       args:
         - NEXT_PUBLIC_API_URL=https://apex.tabcrypt.in
+        - NEXT_PUBLIC_GOOGLE_CLIENT_ID=399842005328-h6t97hs4f0d24timqiigisqhoif143sk.apps.googleusercontent.com
     container_name: apex-frontend
     restart: always
     environment:
       - NEXT_PUBLIC_API_URL=https://apex.tabcrypt.in
+      - NEXT_PUBLIC_GOOGLE_CLIENT_ID=399842005328-h6t97hs4f0d24timqiigisqhoif143sk.apps.googleusercontent.com
     expose:
       - "3000"
     networks:
