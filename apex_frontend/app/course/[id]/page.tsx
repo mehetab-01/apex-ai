@@ -15,11 +15,14 @@ import {
   CheckCircle,
   ListChecks,
   Play,
-  Sparkles
+  Sparkles,
+  RotateCcw
 } from "lucide-react";
-import { getCourse, getRecommendations, type Course, type RecommendedCourse } from "@/lib/api";
+import { getCourse, getRecommendations, getEnrollmentStatus, type Course, type RecommendedCourse, type Enrollment } from "@/lib/api";
 import { PageLoader } from "@/components/LoadingSpinner";
 import CourseCard from "@/components/CourseCard";
+import StartCourseModal from "@/components/StartCourseModal";
+import { useAuth } from "@/contexts/AuthContext";
 import { cn, formatPrice, formatDuration, formatNumber, getDifficultyColor } from "@/lib/utils";
 
 // Platform colors
@@ -40,20 +43,25 @@ const platformConfig: Record<string, { color: string; bgColor: string; name: str
 export default function CourseDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { isAuthenticated } = useAuth();
   const [course, setCourse] = useState<Course | null>(null);
   const [recommendations, setRecommendations] = useState<RecommendedCourse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showStartModal, setShowStartModal] = useState(false);
+  const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
+  const [isEnrolled, setIsEnrolled] = useState(false);
 
+  // Fetch course data
   useEffect(() => {
     const fetchCourse = async () => {
       if (!params.id) return;
-      
+
       setLoading(true);
       try {
         const courseData = await getCourse(params.id as string);
         setCourse(courseData);
-        
+
         // Get recommendations
         try {
           const recs = await getRecommendations(params.id as string, 4);
@@ -72,9 +80,38 @@ export default function CourseDetailPage() {
     fetchCourse();
   }, [params.id]);
 
+  // Check enrollment status
+  useEffect(() => {
+    const checkEnrollment = async () => {
+      if (!params.id || !isAuthenticated) return;
+
+      try {
+        const status = await getEnrollmentStatus(params.id as string);
+        setIsEnrolled(status.is_enrolled);
+        setEnrollment(status.enrollment);
+      } catch (err) {
+        console.error("Failed to check enrollment status:", err);
+      }
+    };
+
+    checkEnrollment();
+  }, [params.id, isAuthenticated]);
+
+  const handleEnrollSuccess = () => {
+    setIsEnrolled(true);
+    // Refresh enrollment status
+    if (params.id && isAuthenticated) {
+      getEnrollmentStatus(params.id as string)
+        .then(status => {
+          setEnrollment(status.enrollment);
+        })
+        .catch(console.error);
+    }
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen pt-24">
+      <div className="min-h-screen py-8">
         <PageLoader />
       </div>
     );
@@ -82,7 +119,7 @@ export default function CourseDetailPage() {
 
   if (error || !course) {
     return (
-      <div className="min-h-screen pt-24">
+      <div className="min-h-screen py-8">
         <div className="max-w-4xl mx-auto px-4 text-center">
           <p className="text-red-400">{error || "Course not found"}</p>
           <button
@@ -101,13 +138,28 @@ export default function CourseDetailPage() {
   const isExternal = course.external_url && platform !== "apex";
 
   const handleEnroll = () => {
-    if (isExternal && course.external_url) {
-      window.open(course.external_url, "_blank", "noopener,noreferrer");
+    // If already enrolled, go to learn page
+    if (isEnrolled) {
+      router.push(`/learn/${course.id}`);
+      return;
     }
+
+    // Show the start course modal for new enrollments
+    setShowStartModal(true);
   };
 
   return (
-    <div className="min-h-screen pt-20 pb-12">
+    <>
+      {/* Start Course Modal */}
+      {course && (
+        <StartCourseModal
+          course={course}
+          isOpen={showStartModal}
+          onClose={() => setShowStartModal(false)}
+          onEnrollSuccess={handleEnrollSuccess}
+        />
+      )}
+    <div className="min-h-screen py-8">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Back Button */}
         <motion.button
@@ -298,17 +350,49 @@ export default function CourseDetailPage() {
                 )}
               </div>
 
+              {/* Enrollment Status Badge */}
+              {isEnrolled && enrollment && (
+                <div className="mb-4 p-3 bg-neon-green/10 border border-neon-green/30 rounded-lg">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-neon-green font-medium">Enrolled</span>
+                    <span className="text-gray-400">
+                      {enrollment.progress_percentage}% complete
+                    </span>
+                  </div>
+                  {enrollment.progress_percentage > 0 && (
+                    <div className="mt-2 h-1.5 bg-apex-darker rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-neon-green rounded-full transition-all"
+                        style={{ width: `${enrollment.progress_percentage}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Enroll Button */}
               <button
                 onClick={handleEnroll}
                 className={cn(
                   "w-full py-3 px-6 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all",
-                  isExternal
-                    ? "bg-neon-cyan text-black hover:shadow-neon-cyan"
+                  isEnrolled
+                    ? "bg-neon-green text-black hover:shadow-neon-green"
                     : "bg-neon-cyan text-black hover:shadow-neon-cyan"
                 )}
               >
-                {isExternal ? (
+                {isEnrolled ? (
+                  isExternal ? (
+                    <>
+                      <ExternalLink className="w-5 h-5" />
+                      Continue on {course.platform_display || platformStyle.name}
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="w-5 h-5" />
+                      Continue Learning
+                    </>
+                  )
+                ) : isExternal ? (
                   <>
                     <ExternalLink className="w-5 h-5" />
                     Go to {course.platform_display || platformStyle.name}
@@ -374,5 +458,6 @@ export default function CourseDetailPage() {
         )}
       </div>
     </div>
+    </>
   );
 }
