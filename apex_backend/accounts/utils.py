@@ -7,26 +7,55 @@ from twilio.rest import Client as TwilioClient
 
 # Brevo (Sendinblue) email OTP sender
 BREVO_API_KEY = os.getenv('BREVO_API_KEY', '')
-BREVO_SENDER_EMAIL = os.getenv('BREVO_SENDER_EMAIL', '')
+BREVO_SENDER_EMAIL = os.getenv('BREVO_SENDER_EMAIL', 'noreply@apex-learning.com')
 
 def send_email_otp(recipient_email, otp_code):
+    """
+    Send OTP via email using Brevo (Sendinblue).
+    Returns True if sent successfully, False otherwise.
+    """
+    if not BREVO_API_KEY:
+        print('[OTP] BREVO_API_KEY not configured - email OTP disabled')
+        print(f'[OTP] Would send OTP {otp_code} to {recipient_email}')
+        return False
+
     subject = 'Your Apex Learning Platform OTP'
-    message = f'Your OTP code is: {otp_code}'
+    html_content = f'''
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #00D4FF;">Apex Learning Platform</h2>
+        <p>Your One-Time Password (OTP) for verification is:</p>
+        <div style="background: #1a1a2e; color: #00D4FF; font-size: 32px; font-weight: bold;
+                    padding: 20px; text-align: center; border-radius: 8px; letter-spacing: 8px;">
+            {otp_code}
+        </div>
+        <p style="color: #666; margin-top: 20px;">
+            This code will expire in 10 minutes. Do not share this code with anyone.
+        </p>
+        <p style="color: #999; font-size: 12px;">
+            If you didn't request this code, please ignore this email.
+        </p>
+    </div>
+    '''
+
     configuration = Configuration()
     configuration.api_key['api-key'] = BREVO_API_KEY
     api_instance = TransactionalEmailsApi(ApiClient(configuration))
+
     send_smtp_email = SendSmtpEmail(
         to=[{"email": recipient_email}],
-        sender={"email": BREVO_SENDER_EMAIL},
+        sender={"email": BREVO_SENDER_EMAIL, "name": "Apex Learning"},
         subject=subject,
-        text_content=message
+        html_content=html_content
     )
+
     try:
         api_instance.send_transac_email(send_smtp_email)
+        print(f'[OTP] Email sent successfully to {recipient_email}')
         return True
     except Exception as e:
-        print(f'Email OTP send failed: {e}')
+        print(f'[OTP] Email send failed: {e}')
         return False
+
 
 # Twilio SMS OTP sender
 TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID', '')
@@ -34,15 +63,26 @@ TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN', '')
 TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER', '')
 
 def send_sms_otp(recipient_phone, otp_code):
-    client = TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-    message = f'Your Apex Learning Platform OTP is: {otp_code}'
+    """
+    Send OTP via SMS using Twilio.
+    Returns True if sent successfully, False otherwise.
+    """
+    if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN or not TWILIO_PHONE_NUMBER:
+        print('[OTP] Twilio credentials not configured - SMS OTP disabled')
+        print(f'[OTP] Would send OTP {otp_code} to {recipient_phone}')
+        return False
+
+    message = f'Your Apex Learning Platform OTP is: {otp_code}. Valid for 10 minutes.'
+
     try:
+        client = TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
         client.messages.create(
             body=message,
             from_=TWILIO_PHONE_NUMBER,
             to=recipient_phone
         )
+        print(f'[OTP] SMS sent successfully to {recipient_phone}')
         return True
     except Exception as e:
-        print(f'SMS OTP send failed: {e}')
+        print(f'[OTP] SMS send failed: {e}')
         return False

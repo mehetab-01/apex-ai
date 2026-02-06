@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![APEX Logo](docs/screenshots/logo.png)
+<img src="docs/screenshots/logo.png" alt="APEX Logo" width="200">
 
 ### Addressing UN SDG 4: Quality Education
 
