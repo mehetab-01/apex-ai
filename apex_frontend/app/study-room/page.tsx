@@ -859,11 +859,7 @@ export default function StudyRoomPage() {
                           {p.user_id === currentRoom.host_id && (
                             <Crown className="w-4 h-4 text-yellow-400 absolute top-2 right-2" />
                           )}
-                          <div className={`w-14 h-14 rounded-full mx-auto mb-2 flex items-center justify-center ${
-                            isMe
-                              ? (isSpeaking && !isMuted ? "speaking-ring" : "speaking-ring-off")
-                              : "speaking-ring-off"
-                          }`}>
+                          <div className="w-14 h-14 rounded-full mx-auto mb-2 flex items-center justify-center">
                             <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-neon-cyan to-neon-purple flex items-center justify-center">
                               {p.display_picture ? (
                                 <img
