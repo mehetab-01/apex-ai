@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Course, StudentProfile, LearningLog, FocusSession
+from .models import Course, StudentProfile, LearningLog, FocusSession, StudyRoom, RoomParticipant, RoomMessage
 
 
 @admin.register(Course)
@@ -76,3 +76,36 @@ class FocusSessionAdmin(admin.ModelAdmin):
     list_filter = ['is_active']
     search_fields = ['student__user__username']
     readonly_fields = ['id', 'started_at']
+
+
+@admin.register(StudyRoom)
+class StudyRoomAdmin(admin.ModelAdmin):
+    list_display = ['name', 'room_code', 'host', 'category', 'status', 'get_participant_count', 'max_participants', 'created_at']
+    list_filter = ['status', 'category', 'is_private']
+    search_fields = ['name', 'room_code', 'host__email']
+    readonly_fields = ['id', 'room_code', 'created_at', 'updated_at']
+    ordering = ['-created_at']
+
+    def get_participant_count(self, obj):
+        return obj.get_participant_count()
+    get_participant_count.short_description = 'Active Participants'
+
+
+@admin.register(RoomParticipant)
+class RoomParticipantAdmin(admin.ModelAdmin):
+    list_display = ['user', 'room', 'is_active', 'focus_time_minutes', 'focus_points_earned', 'joined_at']
+    list_filter = ['is_active']
+    search_fields = ['user__email', 'room__name']
+    readonly_fields = ['id', 'joined_at']
+
+
+@admin.register(RoomMessage)
+class RoomMessageAdmin(admin.ModelAdmin):
+    list_display = ['room', 'sender', 'message_type', 'content_short', 'created_at']
+    list_filter = ['message_type']
+    search_fields = ['content', 'room__name']
+    readonly_fields = ['id', 'created_at']
+
+    def content_short(self, obj):
+        return obj.content[:60] + '...' if len(obj.content) > 60 else obj.content
+    content_short.short_description = 'Content'

@@ -715,6 +715,298 @@ class ChatMessage(models.Model):
         return f"{self.role}: {self.content[:50]}..."
 
 
+# ============================================
+# Collaborative Study Room Models
+# ============================================
+
+class StudyRoom(models.Model):
+    """
+    StudyRoom Model - Virtual rooms for collaborative studying.
+    
+    Supports public/private rooms with capacity limits, shared timers,
+    in-room chat, and focus tracking for group study sessions.
+    """
+    
+    STATUS_CHOICES = [
+        ('waiting', 'Waiting'),
+        ('active', 'Active'),
+        ('ended', 'Ended'),
+    ]
+    
+    CATEGORY_CHOICES = [
+        ('general', 'General Study'),
+        ('web_development', 'Web Development'),
+        ('mobile_development', 'Mobile Development'),
+        ('data_science', 'Data Science'),
+        ('machine_learning', 'Machine Learning'),
+        ('artificial_intelligence', 'Artificial Intelligence'),
+        ('cloud_computing', 'Cloud Computing'),
+        ('cybersecurity', 'Cybersecurity'),
+        ('devops', 'DevOps'),
+        ('blockchain', 'Blockchain'),
+        ('programming_languages', 'Programming Languages'),
+        ('database', 'Database'),
+        ('dsa', 'Data Structures & Algorithms'),
+        ('interview_prep', 'Interview Preparation'),
+        ('competitive_programming', 'Competitive Programming'),
+        ('other', 'Other'),
+    ]
+    
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False
+    )
+    
+    # Room info
+    name = models.CharField(
+        max_length=100,
+        help_text="Name of the study room"
+    )
+    
+    description = models.TextField(
+        blank=True,
+        help_text="Description or topic of the study session"
+    )
+    
+    # Room code for easy sharing (6-char alphanumeric)
+    room_code = models.CharField(
+        max_length=8,
+        unique=True,
+        db_index=True,
+        help_text="Unique room code for joining"
+    )
+    
+    # Room settings
+    is_private = models.BooleanField(
+        default=False,
+        help_text="Private rooms require room code to join"
+    )
+    
+    max_participants = models.PositiveIntegerField(
+        default=6,
+        validators=[MinValueValidator(2), MaxValueValidator(8)],
+        help_text="Maximum number of participants (2-8)"
+    )
+    
+    category = models.CharField(
+        max_length=50,
+        choices=CATEGORY_CHOICES,
+        default='general',
+        help_text="Study topic category"
+    )
+    
+    # Host
+    host = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='hosted_rooms',
+        help_text="Room creator/host"
+    )
+    
+    # Status
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='waiting'
+    )
+    
+    # Pomodoro timer settings (shared)
+    pomodoro_work_minutes = models.PositiveIntegerField(
+        default=25,
+        help_text="Work duration in minutes"
+    )
+    
+    pomodoro_break_minutes = models.PositiveIntegerField(
+        default=5,
+        help_text="Break duration in minutes"
+    )
+    
+    pomodoro_rounds = models.PositiveIntegerField(
+        default=4,
+        help_text="Number of Pomodoro rounds"
+    )
+    
+    # Timer state
+    timer_running = models.BooleanField(
+        default=False,
+        help_text="Whether the shared timer is currently running"
+    )
+    
+    timer_started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the current timer session started"
+    )
+    
+    current_round = models.PositiveIntegerField(
+        default=1,
+        help_text="Current Pomodoro round"
+    )
+    
+    is_break = models.BooleanField(
+        default=False,
+        help_text="Whether it's currently a break period"
+    )
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    ended_at = models.DateTimeField(
+        null=True,
+        blank=True
+    )
+    
+    class Meta:
+        db_table = 'apex_study_rooms'
+        ordering = ['-created_at']
+        verbose_name = 'Study Room'
+        verbose_name_plural = 'Study Rooms'
+    
+    def __str__(self):
+        return f"{self.name} ({self.room_code}) - {self.get_status_display()}"
+    
+    def get_participant_count(self):
+        return self.participants.filter(is_active=True).count()
+    
+    def is_full(self):
+        return self.get_participant_count() >= self.max_participants
+    
+    @staticmethod
+    def generate_room_code():
+        """Generate a unique 6-character room code."""
+        import string
+        import random
+        while True:
+            code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+            if not StudyRoom.objects.filter(room_code=code).exists():
+                return code
+
+
+class RoomParticipant(models.Model):
+    """
+    RoomParticipant Model - Tracks users in a study room.
+    """
+    
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False
+    )
+    
+    room = models.ForeignKey(
+        StudyRoom,
+        on_delete=models.CASCADE,
+        related_name='participants'
+    )
+    
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='room_participations'
+    )
+    
+    # Status
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether user is currently in the room"
+    )
+    
+    is_muted = models.BooleanField(
+        default=False,
+        help_text="Whether user's audio is muted"
+    )
+    
+    is_camera_on = models.BooleanField(
+        default=False,
+        help_text="Whether user's camera is on"
+    )
+    
+    # Focus tracking within room
+    focus_time_minutes = models.PositiveIntegerField(
+        default=0,
+        help_text="Focus time in this room session"
+    )
+    
+    focus_points_earned = models.PositiveIntegerField(
+        default=0,
+        help_text="Focus points earned in this room"
+    )
+    
+    # Timestamps
+    joined_at = models.DateTimeField(auto_now_add=True)
+    left_at = models.DateTimeField(
+        null=True,
+        blank=True
+    )
+    
+    class Meta:
+        db_table = 'apex_room_participants'
+        ordering = ['joined_at']
+        verbose_name = 'Room Participant'
+        verbose_name_plural = 'Room Participants'
+        unique_together = ['room', 'user']
+    
+    def __str__(self):
+        return f"{self.user.email} in {self.room.name}"
+
+
+class RoomMessage(models.Model):
+    """
+    RoomMessage Model - Chat messages within a study room.
+    """
+    
+    MESSAGE_TYPES = [
+        ('text', 'Text'),
+        ('system', 'System'),
+        ('emoji', 'Emoji Reaction'),
+    ]
+    
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False
+    )
+    
+    room = models.ForeignKey(
+        StudyRoom,
+        on_delete=models.CASCADE,
+        related_name='messages'
+    )
+    
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='room_messages',
+        null=True,
+        blank=True,
+        help_text="Null for system messages"
+    )
+    
+    content = models.TextField(
+        max_length=1000,
+        help_text="Message content"
+    )
+    
+    message_type = models.CharField(
+        max_length=20,
+        choices=MESSAGE_TYPES,
+        default='text'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'apex_room_messages'
+        ordering = ['created_at']
+        verbose_name = 'Room Message'
+        verbose_name_plural = 'Room Messages'
+    
+    def __str__(self):
+        sender_name = self.sender.email if self.sender else 'System'
+        return f"{sender_name}: {self.content[:50]}"
+
+
 class UserPreference(models.Model):
     """
     UserPreference Model - Stores user preferences and settings.

@@ -7,7 +7,7 @@ to JSON and vice versa for the REST API.
 
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from learning.models import Course, StudentProfile, LearningLog, FocusSession
+from learning.models import Course, StudentProfile, LearningLog, FocusSession, StudyRoom, RoomParticipant, RoomMessage
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -372,3 +372,188 @@ class CareerRoadmapSerializer(serializers.Serializer):
         child=serializers.DictField()
     )
     roadmap = serializers.DictField()
+
+
+# ============================================
+# Study Room Serializers
+# ============================================
+
+class RoomParticipantSerializer(serializers.ModelSerializer):
+    """Serializer for room participants."""
+    
+    user_name = serializers.CharField(source='user.full_name', read_only=True)
+    user_email = serializers.CharField(source='user.email', read_only=True)
+    user_id = serializers.CharField(source='user.id', read_only=True)
+    display_picture = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = RoomParticipant
+        fields = [
+            'id',
+            'user_id',
+            'user_name',
+            'user_email',
+            'display_picture',
+            'is_active',
+            'is_muted',
+            'is_camera_on',
+            'focus_time_minutes',
+            'focus_points_earned',
+            'joined_at',
+            'left_at',
+        ]
+    
+    def get_display_picture(self, obj):
+        if hasattr(obj.user, 'display_picture') and obj.user.display_picture:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.user.display_picture.url)
+            return str(obj.user.display_picture.url)
+        return None
+
+
+class RoomMessageSerializer(serializers.ModelSerializer):
+    """Serializer for room messages."""
+    
+    sender_name = serializers.SerializerMethodField()
+    sender_id = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = RoomMessage
+        fields = [
+            'id',
+            'sender_id',
+            'sender_name',
+            'content',
+            'message_type',
+            'created_at',
+        ]
+    
+    def get_sender_name(self, obj):
+        if obj.sender:
+            return obj.sender.full_name
+        return 'System'
+    
+    def get_sender_id(self, obj):
+        if obj.sender:
+            return str(obj.sender.id)
+        return None
+
+
+class StudyRoomListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for room listings."""
+    
+    host_name = serializers.CharField(source='host.full_name', read_only=True)
+    participant_count = serializers.SerializerMethodField()
+    category_display = serializers.CharField(source='get_category_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    
+    class Meta:
+        model = StudyRoom
+        fields = [
+            'id',
+            'name',
+            'description',
+            'room_code',
+            'is_private',
+            'max_participants',
+            'participant_count',
+            'category',
+            'category_display',
+            'host_name',
+            'status',
+            'status_display',
+            'pomodoro_work_minutes',
+            'pomodoro_break_minutes',
+            'timer_running',
+            'current_round',
+            'is_break',
+            'created_at',
+        ]
+    
+    def get_participant_count(self, obj):
+        return obj.participants.filter(is_active=True).count()
+
+
+class StudyRoomDetailSerializer(serializers.ModelSerializer):
+    """Full serializer for room details with participants and messages."""
+    
+    host_name = serializers.CharField(source='host.full_name', read_only=True)
+    host_id = serializers.CharField(source='host.id', read_only=True)
+    participant_count = serializers.SerializerMethodField()
+    participants = serializers.SerializerMethodField()
+    recent_messages = serializers.SerializerMethodField()
+    category_display = serializers.CharField(source='get_category_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    
+    class Meta:
+        model = StudyRoom
+        fields = [
+            'id',
+            'name',
+            'description',
+            'room_code',
+            'is_private',
+            'max_participants',
+            'participant_count',
+            'category',
+            'category_display',
+            'host_id',
+            'host_name',
+            'status',
+            'status_display',
+            'pomodoro_work_minutes',
+            'pomodoro_break_minutes',
+            'pomodoro_rounds',
+            'timer_running',
+            'timer_started_at',
+            'current_round',
+            'is_break',
+            'participants',
+            'recent_messages',
+            'created_at',
+            'updated_at',
+        ]
+    
+    def get_participant_count(self, obj):
+        return obj.participants.filter(is_active=True).count()
+    
+    def get_participants(self, obj):
+        active_participants = obj.participants.filter(is_active=True)
+        return RoomParticipantSerializer(active_participants, many=True, context=self.context).data
+    
+    def get_recent_messages(self, obj):
+        messages = obj.messages.order_by('-created_at')[:50]
+        return RoomMessageSerializer(list(reversed(messages)), many=True, context=self.context).data
+
+
+class CreateStudyRoomSerializer(serializers.Serializer):
+    """Serializer for creating a study room."""
+    
+    name = serializers.CharField(max_length=100)
+    description = serializers.CharField(required=False, allow_blank=True, default='')
+    is_private = serializers.BooleanField(default=False)
+    max_participants = serializers.IntegerField(min_value=2, max_value=8, default=6)
+    category = serializers.ChoiceField(
+        choices=StudyRoom.CATEGORY_CHOICES,
+        default='general'
+    )
+    pomodoro_work_minutes = serializers.IntegerField(min_value=5, max_value=60, default=25)
+    pomodoro_break_minutes = serializers.IntegerField(min_value=1, max_value=30, default=5)
+    pomodoro_rounds = serializers.IntegerField(min_value=1, max_value=10, default=4)
+
+
+class JoinRoomSerializer(serializers.Serializer):
+    """Serializer for joining a room by code."""
+    
+    room_code = serializers.CharField(max_length=8)
+
+
+class RoomChatSerializer(serializers.Serializer):
+    """Serializer for sending a chat message."""
+    
+    content = serializers.CharField(max_length=1000)
+    message_type = serializers.ChoiceField(
+        choices=RoomMessage.MESSAGE_TYPES,
+        default='text'
+    )

@@ -27,6 +27,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.conf import settings
 
 from learning.models import Course, StudentProfile, LearningLog, FocusSession
+from learning.models import StudyRoom, RoomParticipant, RoomMessage
 from learning.recommender import get_recommender, CourseRecommender
 from learning.focus_mode import get_current_focus_stats
 
@@ -42,6 +43,13 @@ from .serializers import (
     ChatGuideRequestSerializer,
     ChatGuideResponseSerializer,
     CareerRoadmapSerializer,
+    StudyRoomListSerializer,
+    StudyRoomDetailSerializer,
+    CreateStudyRoomSerializer,
+    JoinRoomSerializer,
+    RoomChatSerializer,
+    RoomMessageSerializer,
+    RoomParticipantSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -1985,3 +1993,531 @@ class FetchExternalCoursesView(APIView):
                 {'status': 'error', 'message': f'Failed to fetch external courses: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+# ============================================
+# Collaborative Study Room Views
+# ============================================
+
+class StudyRoomListView(APIView):
+    """
+    GET  /api/rooms/ - List all active/public rooms
+    POST /api/rooms/ - Create a new study room
+    """
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def get(self, request):
+        """List all public active/waiting rooms."""
+        try:
+            category = request.query_params.get('category', None)
+            search = request.query_params.get('search', None)
+            show_mine = request.query_params.get('mine', 'false').lower() == 'true'
+
+            rooms = StudyRoom.objects.filter(
+                status__in=['waiting', 'active']
+            )
+
+            if show_mine:
+                # Show rooms where user is host or participant
+                from django.db.models import Q
+                rooms = StudyRoom.objects.filter(
+                    Q(host=request.user) |
+                    Q(participants__user=request.user, participants__is_active=True),
+                    status__in=['waiting', 'active']
+                ).distinct()
+            else:
+                # Only show public rooms for browse
+                rooms = rooms.filter(is_private=False)
+
+            if category and category != 'all':
+                rooms = rooms.filter(category=category)
+
+            if search:
+                from django.db.models import Q
+                rooms = rooms.filter(
+                    Q(name__icontains=search) | Q(description__icontains=search)
+                )
+
+            rooms = rooms.order_by('-created_at')
+            serializer = StudyRoomListSerializer(rooms, many=True, context={'request': request})
+
+            return Response({
+                'status': 'success',
+                'count': rooms.count(),
+                'rooms': serializer.data
+            })
+
+        except Exception as e:
+            logger.error(f"Study room list error: {e}")
+            return Response(
+                {'status': 'error', 'message': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def post(self, request):
+        """Create a new study room."""
+        try:
+            serializer = CreateStudyRoomSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+
+            room = StudyRoom.objects.create(
+                name=serializer.validated_data['name'],
+                description=serializer.validated_data.get('description', ''),
+                room_code=StudyRoom.generate_room_code(),
+                is_private=serializer.validated_data.get('is_private', False),
+                max_participants=serializer.validated_data.get('max_participants', 6),
+                category=serializer.validated_data.get('category', 'general'),
+                host=request.user,
+                pomodoro_work_minutes=serializer.validated_data.get('pomodoro_work_minutes', 25),
+                pomodoro_break_minutes=serializer.validated_data.get('pomodoro_break_minutes', 5),
+                pomodoro_rounds=serializer.validated_data.get('pomodoro_rounds', 4),
+                status='waiting',
+            )
+
+            # Add host as participant
+            RoomParticipant.objects.create(
+                room=room,
+                user=request.user,
+                is_active=True
+            )
+
+            # Add system message
+            RoomMessage.objects.create(
+                room=room,
+                content=f"{request.user.full_name} created the room",
+                message_type='system'
+            )
+
+            detail_serializer = StudyRoomDetailSerializer(room, context={'request': request})
+
+            return Response({
+                'status': 'success',
+                'message': 'Study room created',
+                'room': detail_serializer.data
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            logger.error(f"Create study room error: {e}")
+            return Response(
+                {'status': 'error', 'message': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class StudyRoomDetailView(APIView):
+    """
+    GET    /api/rooms/<id>/ - Get room details
+    DELETE /api/rooms/<id>/ - End/close room (host only)
+    """
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def get(self, request, room_id):
+        """Get room details with participants and messages."""
+        try:
+            room = StudyRoom.objects.get(id=room_id)
+            serializer = StudyRoomDetailSerializer(room, context={'request': request})
+
+            # Check if the requesting user is a participant
+            is_participant = room.participants.filter(
+                user=request.user, is_active=True
+            ).exists()
+
+            return Response({
+                'status': 'success',
+                'room': serializer.data,
+                'is_participant': is_participant,
+                'is_host': str(room.host.id) == str(request.user.id),
+            })
+
+        except StudyRoom.DoesNotExist:
+            return Response(
+                {'status': 'error', 'message': 'Room not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Study room detail error: {e}")
+            return Response(
+                {'status': 'error', 'message': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def delete(self, request, room_id):
+        """End/close a room (host only)."""
+        try:
+            room = StudyRoom.objects.get(id=room_id)
+
+            if str(room.host.id) != str(request.user.id):
+                return Response(
+                    {'status': 'error', 'message': 'Only the host can end the room'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            from django.utils import timezone
+            room.status = 'ended'
+            room.ended_at = timezone.now()
+            room.timer_running = False
+            room.save()
+
+            # Mark all participants as inactive
+            room.participants.filter(is_active=True).update(
+                is_active=False,
+                left_at=timezone.now()
+            )
+
+            # Add system message
+            RoomMessage.objects.create(
+                room=room,
+                content="Room has been ended by the host",
+                message_type='system'
+            )
+
+            return Response({
+                'status': 'success',
+                'message': 'Room ended'
+            })
+
+        except StudyRoom.DoesNotExist:
+            return Response(
+                {'status': 'error', 'message': 'Room not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class JoinRoomView(APIView):
+    """
+    POST /api/rooms/<id>/join/ - Join a room by ID
+    POST /api/rooms/join-by-code/ - Join a room by code
+    """
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def post(self, request, room_id=None):
+        """Join a study room."""
+        try:
+            # Join by ID or by code
+            if room_id:
+                room = StudyRoom.objects.get(id=room_id)
+            else:
+                serializer = JoinRoomSerializer(data=request.data)
+                serializer.is_valid(raise_exception=True)
+                code = serializer.validated_data['room_code'].upper()
+                room = StudyRoom.objects.get(room_code=code)
+
+            # Validations
+            if room.status == 'ended':
+                return Response(
+                    {'status': 'error', 'message': 'This room has ended'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if room.is_full():
+                return Response(
+                    {'status': 'error', 'message': 'Room is full'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Check if already a participant
+            existing = RoomParticipant.objects.filter(
+                room=room, user=request.user
+            ).first()
+
+            if existing:
+                if existing.is_active:
+                    return Response({
+                        'status': 'success',
+                        'message': 'Already in the room',
+                        'room': StudyRoomDetailSerializer(room, context={'request': request}).data
+                    })
+                else:
+                    # Rejoin
+                    existing.is_active = True
+                    existing.left_at = None
+                    existing.save()
+            else:
+                RoomParticipant.objects.create(
+                    room=room,
+                    user=request.user,
+                    is_active=True
+                )
+
+            # System message
+            RoomMessage.objects.create(
+                room=room,
+                content=f"{request.user.full_name} joined the room",
+                message_type='system'
+            )
+
+            # Auto-start room if enough people
+            if room.status == 'waiting' and room.get_participant_count() >= 2:
+                room.status = 'active'
+                room.save()
+
+            detail_serializer = StudyRoomDetailSerializer(room, context={'request': request})
+
+            return Response({
+                'status': 'success',
+                'message': 'Joined room successfully',
+                'room': detail_serializer.data
+            })
+
+        except StudyRoom.DoesNotExist:
+            return Response(
+                {'status': 'error', 'message': 'Room not found. Check the room code.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Join room error: {e}")
+            return Response(
+                {'status': 'error', 'message': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class LeaveRoomView(APIView):
+    """POST /api/rooms/<id>/leave/ - Leave a room."""
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def post(self, request, room_id):
+        try:
+            room = StudyRoom.objects.get(id=room_id)
+            participant = RoomParticipant.objects.filter(
+                room=room, user=request.user, is_active=True
+            ).first()
+
+            if not participant:
+                return Response(
+                    {'status': 'error', 'message': 'You are not in this room'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            from django.utils import timezone
+            participant.is_active = False
+            participant.left_at = timezone.now()
+            participant.save()
+
+            # System message
+            RoomMessage.objects.create(
+                room=room,
+                content=f"{request.user.full_name} left the room",
+                message_type='system'
+            )
+
+            # If host leaves and no active participants, end room
+            active_count = room.get_participant_count()
+            if active_count == 0:
+                room.status = 'ended'
+                room.ended_at = timezone.now()
+                room.timer_running = False
+                room.save()
+
+            return Response({
+                'status': 'success',
+                'message': 'Left the room'
+            })
+
+        except StudyRoom.DoesNotExist:
+            return Response(
+                {'status': 'error', 'message': 'Room not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class RoomChatView(APIView):
+    """
+    GET  /api/rooms/<id>/messages/ - Get room messages
+    POST /api/rooms/<id>/messages/ - Send a message
+    """
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def get(self, request, room_id):
+        """Get room chat messages."""
+        try:
+            room = StudyRoom.objects.get(id=room_id)
+            limit = int(request.query_params.get('limit', 50))
+            before = request.query_params.get('before', None)
+
+            messages = room.messages.all()
+            if before:
+                messages = messages.filter(created_at__lt=before)
+
+            messages = messages.order_by('-created_at')[:limit]
+            serializer = RoomMessageSerializer(
+                list(reversed(messages)), many=True, context={'request': request}
+            )
+
+            return Response({
+                'status': 'success',
+                'messages': serializer.data
+            })
+
+        except StudyRoom.DoesNotExist:
+            return Response(
+                {'status': 'error', 'message': 'Room not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    def post(self, request, room_id):
+        """Send a message in the room."""
+        try:
+            room = StudyRoom.objects.get(id=room_id)
+
+            # Verify user is a participant
+            is_participant = room.participants.filter(
+                user=request.user, is_active=True
+            ).exists()
+
+            if not is_participant:
+                return Response(
+                    {'status': 'error', 'message': 'You must be in the room to send messages'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            serializer = RoomChatSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+
+            message = RoomMessage.objects.create(
+                room=room,
+                sender=request.user,
+                content=serializer.validated_data['content'],
+                message_type=serializer.validated_data.get('message_type', 'text')
+            )
+
+            msg_serializer = RoomMessageSerializer(message, context={'request': request})
+
+            return Response({
+                'status': 'success',
+                'message': msg_serializer.data
+            }, status=status.HTTP_201_CREATED)
+
+        except StudyRoom.DoesNotExist:
+            return Response(
+                {'status': 'error', 'message': 'Room not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class RoomTimerView(APIView):
+    """
+    POST /api/rooms/<id>/timer/ - Control the shared timer
+    """
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def post(self, request, room_id):
+        """Start/stop/reset the shared Pomodoro timer."""
+        try:
+            room = StudyRoom.objects.get(id=room_id)
+            action = request.data.get('action', 'toggle')  # toggle, start, stop, reset, next_round
+
+            # Only host can control timer
+            if str(room.host.id) != str(request.user.id):
+                return Response(
+                    {'status': 'error', 'message': 'Only the host can control the timer'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            from django.utils import timezone
+
+            if action == 'start' or (action == 'toggle' and not room.timer_running):
+                room.timer_running = True
+                room.timer_started_at = timezone.now()
+                msg = "Timer started! Let's focus 🎯"
+
+            elif action == 'stop' or (action == 'toggle' and room.timer_running):
+                room.timer_running = False
+                msg = "Timer paused ⏸️"
+
+            elif action == 'reset':
+                room.timer_running = False
+                room.current_round = 1
+                room.is_break = False
+                room.timer_started_at = None
+                msg = "Timer reset 🔄"
+
+            elif action == 'next_round':
+                if room.is_break:
+                    # End of break, start new work round
+                    room.is_break = False
+                    room.current_round += 1
+                    msg = f"Break over! Round {room.current_round} starting 💪"
+                else:
+                    # End of work, start break
+                    room.is_break = True
+                    msg = "Great work! Time for a break ☕"
+
+                room.timer_running = True
+                room.timer_started_at = timezone.now()
+
+            else:
+                return Response(
+                    {'status': 'error', 'message': 'Invalid action'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            room.save()
+
+            # System message
+            RoomMessage.objects.create(
+                room=room,
+                content=msg,
+                message_type='system'
+            )
+
+            return Response({
+                'status': 'success',
+                'timer_running': room.timer_running,
+                'timer_started_at': room.timer_started_at,
+                'current_round': room.current_round,
+                'is_break': room.is_break,
+                'message': msg,
+            })
+
+        except StudyRoom.DoesNotExist:
+            return Response(
+                {'status': 'error', 'message': 'Room not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class RoomParticipantsView(APIView):
+    """GET /api/rooms/<id>/participants/ - Get active participants."""
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def get(self, request, room_id):
+        try:
+            room = StudyRoom.objects.get(id=room_id)
+            participants = room.participants.filter(is_active=True)
+            serializer = RoomParticipantSerializer(
+                participants, many=True, context={'request': request}
+            )
+
+            return Response({
+                'status': 'success',
+                'participants': serializer.data,
+                'count': participants.count(),
+            })
+
+        except StudyRoom.DoesNotExist:
+            return Response(
+                {'status': 'error', 'message': 'Room not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class RoomCategoriesView(APIView):
+    """GET /api/rooms/categories/ - Get room categories."""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({
+            'status': 'success',
+            'categories': [
+                {'value': c[0], 'label': c[1]}
+                for c in StudyRoom.CATEGORY_CHOICES
+            ]
+        })

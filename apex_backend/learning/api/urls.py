@@ -53,4 +53,15 @@ urlpatterns = [
 
     # YouTube Video Info
     path('youtube/video-info/', views.YouTubeVideoInfoView.as_view(), name='youtube_video_info'),
+
+    # ===== Collaborative Study Rooms =====
+    path('rooms/', views.StudyRoomListView.as_view(), name='study_room_list'),
+    path('rooms/categories/', views.RoomCategoriesView.as_view(), name='room_categories'),
+    path('rooms/join-by-code/', views.JoinRoomView.as_view(), name='join_room_by_code'),
+    path('rooms/<uuid:room_id>/', views.StudyRoomDetailView.as_view(), name='study_room_detail'),
+    path('rooms/<uuid:room_id>/join/', views.JoinRoomView.as_view(), name='join_room'),
+    path('rooms/<uuid:room_id>/leave/', views.LeaveRoomView.as_view(), name='leave_room'),
+    path('rooms/<uuid:room_id>/messages/', views.RoomChatView.as_view(), name='room_chat'),
+    path('rooms/<uuid:room_id>/timer/', views.RoomTimerView.as_view(), name='room_timer'),
+    path('rooms/<uuid:room_id>/participants/', views.RoomParticipantsView.as_view(), name='room_participants'),
 ]

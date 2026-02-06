@@ -8,6 +8,7 @@ import {
   Eye,
   Briefcase,
   MessageSquare,
+  Users,
   Menu,
   X,
   UserCircle,
@@ -24,6 +25,7 @@ import { useAuth } from "@/contexts/AuthContext";
 const navLinks = [
   { href: "/dashboard", label: "Dashboard", shortLabel: "Home", icon: BookOpen },
   { href: "/focus-mode", label: "Focus Mode", shortLabel: "Focus", icon: Eye },
+  { href: "/study-room", label: "Study Room", shortLabel: "Rooms", icon: Users },
   { href: "/career", label: "Career", shortLabel: "Career", icon: Briefcase },
   { href: "/chat", label: "AI Guide", shortLabel: "AI", icon: MessageSquare },
 ];
