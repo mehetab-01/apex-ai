@@ -158,9 +158,9 @@ Learn together with peers in real-time:
 <details>
 <summary><b>📸 Screenshots</b></summary>
 
-| Study Room Lobby | Active Study Room |
-|:----------------:|:-----------------:|
-| ![Room Lobby](docs/screenshots/features/study-room-lobby.png) | ![Active Room](docs/screenshots/features/study-room-active.png) |
+| Study Room Lobby | Active Study Room | Pomodoro Timer |
+|:----------------:|:-----------------:|:--------------:|
+| ![Room Lobby](docs/screenshots/features/study-room-lobby.png) | ![Active Room](docs/screenshots/features/study-room-active.png) | ![Timer](docs/screenshots/features/pomodoro-timer.png) |
 
 </details>
 
@@ -233,9 +233,9 @@ Multiple authentication methods with security features:
 <details>
 <summary><b>📸 Screenshots</b></summary>
 
-| Login Page | Registration | Face Validation |
-|:----------:|:------------:|:---------------:|
-| ![Login](docs/screenshots/pages/login.png) | ![Register](docs/screenshots/pages/register.png) | ![Face](docs/screenshots/features/face-validation.png) |
+| Face Validation |
+|:---------------:|
+| ![Face](docs/screenshots/features/face-validation.png) |
 
 </details>
 
