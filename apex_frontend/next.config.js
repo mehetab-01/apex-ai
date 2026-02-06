@@ -2,6 +2,9 @@
 const nextConfig = {
   // Enable React strict mode for better development experience
   reactStrictMode: true,
+
+  // Enable standalone output for Docker deployment
+  output: 'standalone',
   
   // Configure image domains for external images
   images: {
@@ -10,6 +13,11 @@ const nextConfig = {
         protocol: 'http',
         hostname: 'localhost',
         port: '8000',
+        pathname: '/media/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'apex.tabcrypt.in',
         pathname: '/media/**',
       },
     ],
