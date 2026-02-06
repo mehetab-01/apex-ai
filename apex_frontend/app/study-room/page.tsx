@@ -168,6 +168,10 @@ export default function StudyRoomPage() {
   const micStreamRef = useRef<MediaStream | null>(null);
   const speechFrameRef = useRef<number | null>(null);
 
+  // Camera stream state
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+
   // Timer state
   const [timerSeconds, setTimerSeconds] = useState(0);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -295,6 +299,46 @@ export default function StudyRoomPage() {
       stopSpeechDetection();
     };
   }, [view, isMuted]);
+
+  // ===== Camera stream management =====
+  useEffect(() => {
+    let cancelled = false;
+
+    const startCamera = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
+        cameraStreamRef.current = stream;
+        // Attach to video element if it exists
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
+        }
+      } catch (err) {
+        console.warn("Camera access denied or unavailable:", err);
+      }
+    };
+
+    const stopCamera = () => {
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach(t => t.stop());
+        cameraStreamRef.current = null;
+      }
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = null;
+      }
+    };
+
+    if (view === "room" && isCameraOn) {
+      startCamera();
+    } else {
+      stopCamera();
+    }
+
+    return () => {
+      cancelled = true;
+      stopCamera();
+    };
+  }, [view, isCameraOn]);
 
   // ===== Auto-scroll chat =====
   useEffect(() => {
@@ -776,7 +820,21 @@ export default function StudyRoomPage() {
                         : (!p.is_muted ? "speaking-ring-off" : "speaking-ring-off")
                     }`}>
                       <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-neon-cyan to-neon-purple flex items-center justify-center">
-                        {p.display_picture ? (
+                        {/* Show live video for current user when camera is on */}
+                        {p.user_id === user?.id && isCameraOn ? (
+                          <video
+                            ref={(el) => {
+                              localVideoRef.current = el;
+                              if (el && cameraStreamRef.current) {
+                                el.srcObject = cameraStreamRef.current;
+                              }
+                            }}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="w-full h-full object-cover scale-x-[-1]"
+                          />
+                        ) : p.display_picture ? (
                           <img
                             src={p.display_picture}
                             alt={p.user_name}
