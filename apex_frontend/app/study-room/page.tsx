@@ -158,7 +158,7 @@ export default function StudyRoomPage() {
   const [messages, setMessages] = useState<RoomMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [copied, setCopied] = useState(false);
-  const [showChat, setShowChat] = useState(true);
+  const [showChat, setShowChat] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -189,6 +189,13 @@ export default function StudyRoomPage() {
   // Timer state
   const [timerSeconds, setTimerSeconds] = useState(0);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ===== Open chat by default on desktop only =====
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches) {
+      setShowChat(true);
+    }
+  }, []);
 
   // ===== Auth redirect =====
   useEffect(() => {
