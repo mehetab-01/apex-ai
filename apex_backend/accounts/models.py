@@ -63,10 +63,10 @@ class ApexUser(AbstractBaseUser, PermissionsMixin):
     Requires face-validated profile picture during onboarding.
     """
     
-    # Phone number validator
+    # Phone number validator - requires country code with +
     phone_regex = RegexValidator(
-        regex=r'^\+?1?\d{9,15}$',
-        message="Phone number must be entered in the format: '+999999999'. Up to 15 digits allowed."
+        regex=r'^\+\d{10,15}$',
+        message="Phone number must include country code, e.g. '+919876543210'. 10-15 digits after '+'."
     )
     
     # Primary identifier

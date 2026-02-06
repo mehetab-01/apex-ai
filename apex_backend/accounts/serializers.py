@@ -42,6 +42,17 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         password_confirm = attrs.get('password_confirm')
         auth_provider = attrs.get('auth_provider', 'email')
         
+        # Normalize phone number: strip spaces/dashes, ensure + prefix
+        if phone_number:
+            phone_number = re.sub(r'[\s\-\(\)]', '', phone_number)
+            if not phone_number.startswith('+'):
+                phone_number = '+' + phone_number
+            if not re.match(r'^\+\d{10,15}$', phone_number):
+                raise serializers.ValidationError(
+                    {"phone_number": "Include country code, e.g. '+919876543210'."}
+                )
+            attrs['phone_number'] = phone_number
+        
         # Must have either email or phone
         if not email and not phone_number:
             raise serializers.ValidationError(
@@ -114,9 +125,16 @@ class PhoneLoginSerializer(serializers.Serializer):
     phone_number = serializers.CharField()
     
     def validate_phone_number(self, value):
-        # Basic phone validation
-        if not re.match(r'^\+?1?\d{9,15}$', value):
-            raise serializers.ValidationError("Invalid phone number format.")
+        # Normalize: strip spaces/dashes, ensure + prefix
+        value = re.sub(r'[\s\-\(\)]', '', value)
+        if not value.startswith('+'):
+            value = '+' + value
+        
+        # Must be + followed by 10-15 digits (country code + number)
+        if not re.match(r'^\+\d{10,15}$', value):
+            raise serializers.ValidationError(
+                "Invalid phone number. Include country code, e.g. '+919876543210'."
+            )
         
         try:
             user = ApexUser.objects.get(phone_number=value)

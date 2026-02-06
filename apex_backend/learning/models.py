@@ -945,6 +945,10 @@ class RoomParticipant(models.Model):
         null=True,
         blank=True
     )
+    last_seen = models.DateTimeField(
+        auto_now=True,
+        help_text="Last heartbeat from this participant"
+    )
     
     class Meta:
         db_table = 'apex_room_participants'

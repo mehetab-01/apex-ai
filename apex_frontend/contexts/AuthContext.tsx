@@ -86,8 +86,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!isAuthOnlyRoute && !isPublicRoute) {
           router.push("/onboarding");
         }
-      } else if (isAuthOnlyRoute) {
-        // User completed onboarding but trying to access onboarding page
+      } else if (isAuthOnlyRoute && pathname !== "/onboarding") {
+        // Redirect from auth-only routes (but NOT /onboarding — it manages its own redirects)
         router.push("/dashboard");
       }
     }
@@ -101,14 +101,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    const accessToken = localStorage.getItem("apex_access_token");
     const refreshToken = localStorage.getItem("apex_refresh_token");
     
     try {
-      // Call logout API to blacklist token
+      // Call logout API to blacklist token and leave all rooms
       await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/logout/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${accessToken}`,
         },
         body: JSON.stringify({ refresh: refreshToken }),
       });

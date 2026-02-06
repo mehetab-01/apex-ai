@@ -2305,17 +2305,32 @@ class LeaveRoomView(APIView):
                 message_type='system'
             )
 
-            # If host leaves and no active participants, end room
+            is_host = str(room.host.id) == str(request.user.id)
             active_count = room.get_participant_count()
-            if active_count == 0:
+
+            # End room if the host leaves OR if no active participants remain
+            if is_host or active_count == 0:
                 room.status = 'ended'
                 room.ended_at = timezone.now()
                 room.timer_running = False
                 room.save()
 
+                # Mark all remaining participants as inactive
+                room.participants.filter(is_active=True).update(
+                    is_active=False,
+                    left_at=timezone.now()
+                )
+
+                RoomMessage.objects.create(
+                    room=room,
+                    content="Room ended" if active_count == 0 else "Room ended — host left",
+                    message_type='system'
+                )
+
             return Response({
                 'status': 'success',
-                'message': 'Left the room'
+                'message': 'Left the room',
+                'room_ended': is_host or active_count == 0,
             })
 
         except StudyRoom.DoesNotExist:
@@ -2584,3 +2599,70 @@ class RoomCategoriesView(APIView):
                 for c in StudyRoom.CATEGORY_CHOICES
             ]
         })
+
+
+class RoomHeartbeatView(APIView):
+    """
+    POST /api/rooms/<id>/heartbeat/ — Participant sends heartbeat to stay active.
+    Also cleans up stale participants who haven't sent a heartbeat in 30+ seconds.
+    """
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def post(self, request, room_id):
+        from django.utils import timezone
+        from datetime import timedelta
+
+        try:
+            room = StudyRoom.objects.get(id=room_id)
+
+            # Update this participant's last_seen
+            updated = RoomParticipant.objects.filter(
+                room=room, user=request.user, is_active=True
+            ).update(last_seen=timezone.now())
+
+            # Clean up stale participants (no heartbeat for 30+ seconds)
+            stale_threshold = timezone.now() - timedelta(seconds=30)
+            stale = room.participants.filter(
+                is_active=True,
+                last_seen__lt=stale_threshold
+            )
+            stale_names = list(stale.values_list('user__full_name', flat=True))
+            if stale.exists():
+                stale.update(is_active=False, left_at=timezone.now())
+                for name in stale_names:
+                    RoomMessage.objects.create(
+                        room=room,
+                        content=f"{name} disconnected",
+                        message_type='system'
+                    )
+
+                # If host went stale, end the room
+                host_still_active = room.participants.filter(
+                    user=room.host, is_active=True
+                ).exists()
+                if not host_still_active:
+                    room.status = 'ended'
+                    room.ended_at = timezone.now()
+                    room.timer_running = False
+                    room.save()
+                    room.participants.filter(is_active=True).update(
+                        is_active=False, left_at=timezone.now()
+                    )
+                    RoomMessage.objects.create(
+                        room=room,
+                        content="Room ended — host disconnected",
+                        message_type='system'
+                    )
+
+            return Response({
+                'status': 'success',
+                'room_status': room.status,
+                'active_count': room.get_participant_count(),
+            })
+
+        except StudyRoom.DoesNotExist:
+            return Response(
+                {'status': 'error', 'message': 'Room not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )

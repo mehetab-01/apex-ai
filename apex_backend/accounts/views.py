@@ -113,21 +113,37 @@ class RegisterView(APIView):
 class EmailLoginView(APIView):
     """
     Email + Password login.
-    
+
     POST /api/auth/login/email/
     """
     permission_classes = [AllowAny]
-    
+
     def post(self, request):
+        email = request.data.get('email')
+
+        # First check if user exists and is a Google user
+        if email:
+            try:
+                user = ApexUser.objects.get(email=email)
+                if user.auth_provider == 'google':
+                    return Response({
+                        'status': 'error',
+                        'message': 'This account uses Google Sign-In. Please sign in with Google or use "Forgot Password" to set a password.',
+                        'auth_provider': 'google',
+                        'require_google_signin': True
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            except ApexUser.DoesNotExist:
+                pass  # Let the serializer handle non-existent users
+
         serializer = EmailLoginSerializer(data=request.data)
-        
+
         if serializer.is_valid():
             user = serializer.validated_data['user']
-            
+
             # Update last login
             user.last_login_at = timezone.now()
             user.save(update_fields=['last_login_at'])
-            
+
             # Log login
             LoginHistory.objects.create(
                 user=user,
@@ -136,9 +152,9 @@ class EmailLoginView(APIView):
                 user_agent=request.META.get('HTTP_USER_AGENT', ''),
                 success=True
             )
-            
+
             tokens = get_tokens_for_user(user)
-            
+
             return Response({
                 'status': 'success',
                 'message': 'Login successful',
@@ -146,7 +162,7 @@ class EmailLoginView(APIView):
                 'tokens': tokens,
                 'onboarding_completed': user.onboarding_completed
             })
-        
+
         return Response({
             'status': 'error',
             'errors': serializer.errors
@@ -168,6 +184,13 @@ class PhoneLoginView(APIView):
             phone_number = serializer.validated_data['phone_number']
             user = ApexUser.objects.get(phone_number=phone_number)
             
+            # Invalidate any previous unused OTPs for this user
+            OTPVerification.objects.filter(
+                user=user,
+                verification_type='phone',
+                is_used=False
+            ).update(is_used=True)
+            
             # Generate OTP
             otp = generate_otp()
             OTPVerification.objects.create(
@@ -177,12 +200,23 @@ class PhoneLoginView(APIView):
                 expires_at=timezone.now() + timedelta(minutes=5)
             )
             
-            # In production, send via SMS
-            return Response({
-                'status': 'success',
-                'message': 'OTP sent to your phone number',
-                'otp_code': otp,  # Remove in production
-            })
+            # Send OTP via SMS using Twilio
+            sms_sent = send_sms_otp(phone_number, otp)
+            
+            if sms_sent:
+                return Response({
+                    'status': 'success',
+                    'message': 'OTP sent to your phone number',
+                })
+            else:
+                # SMS failed - log the OTP for debugging and inform user
+                logger.warning(f'SMS OTP send failed for {phone_number}. OTP: {otp}')
+                return Response({
+                    'status': 'success',
+                    'message': 'OTP generated. If you do not receive an SMS, check that your phone number is verified in Twilio (trial account limitation).',
+                    'sms_delivery': 'pending',
+                    'debug_otp': otp if settings.DEBUG else None,
+                })
         
         return Response({
             'status': 'error',
@@ -989,6 +1023,41 @@ class LogoutView(APIView):
     
     def post(self, request):
         try:
+            # Leave all active study rooms before logout
+            from learning.models import RoomParticipant, RoomMessage, StudyRoom
+            active_participations = RoomParticipant.objects.filter(
+                user=request.user, is_active=True
+            ).select_related('room')
+
+            for participant in active_participations:
+                room = participant.room
+                participant.is_active = False
+                participant.left_at = timezone.now()
+                participant.save()
+
+                RoomMessage.objects.create(
+                    room=room,
+                    content=f"{request.user.full_name} left the room",
+                    message_type='system'
+                )
+
+                is_host = str(room.host_id) == str(request.user.id)
+                active_count = room.get_participant_count()
+
+                if is_host or active_count == 0:
+                    room.status = 'ended'
+                    room.ended_at = timezone.now()
+                    room.timer_running = False
+                    room.save()
+                    room.participants.filter(is_active=True).update(
+                        is_active=False, left_at=timezone.now()
+                    )
+                    RoomMessage.objects.create(
+                        room=room,
+                        content="Room ended \u2014 host logged out" if is_host else "Room ended",
+                        message_type='system'
+                    )
+
             refresh_token = request.data.get('refresh')
             if refresh_token:
                 token = RefreshToken(refresh_token)
@@ -1008,21 +1077,21 @@ class LogoutView(APIView):
 class ResendOTPView(APIView):
     """
     Resend OTP verification code.
-    
+
     POST /api/auth/resend-otp/
     """
     permission_classes = [AllowAny]
-    
+
     def post(self, request):
         email = request.data.get('email')
         phone_number = request.data.get('phone_number')
-        
+
         if not email and not phone_number:
             return Response({
                 'status': 'error',
                 'message': 'Email or phone number required'
             }, status=status.HTTP_400_BAD_REQUEST)
-        
+
         try:
             if email:
                 user = ApexUser.objects.get(email=email)
@@ -1033,7 +1102,7 @@ class ResendOTPView(APIView):
                 'status': 'error',
                 'message': 'User not found'
             }, status=status.HTTP_404_NOT_FOUND)
-        
+
         # Generate new OTP
         otp = generate_otp()
         OTPVerification.objects.create(
@@ -1053,3 +1122,115 @@ class ResendOTPView(APIView):
             'status': 'success',
             'message': 'OTP sent successfully'
         })
+
+
+class ForgotPasswordView(APIView):
+    """
+    Request password reset - sends OTP to email.
+
+    POST /api/auth/forgot-password/
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+
+            try:
+                user = ApexUser.objects.get(email=email)
+            except ApexUser.DoesNotExist:
+                return Response({
+                    'status': 'error',
+                    'message': 'No account found with this email'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Check if user is a Google user
+            if user.auth_provider == 'google':
+                return Response({
+                    'status': 'error',
+                    'message': 'This account uses Google Sign-In. Please sign in with Google.',
+                    'auth_provider': 'google'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Generate OTP for password reset
+            otp = generate_otp()
+            OTPVerification.objects.create(
+                user=user,
+                verification_type='password_reset',
+                otp_code=otp,
+                expires_at=timezone.now() + timedelta(minutes=10)
+            )
+
+            # Send OTP via email
+            send_email_otp(email, otp)
+
+            return Response({
+                'status': 'success',
+                'message': 'Password reset OTP sent to your email'
+            })
+
+        return Response({
+            'status': 'error',
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ResetPasswordView(APIView):
+    """
+    Reset password with OTP verification.
+
+    POST /api/auth/reset-password/
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            otp_code = serializer.validated_data['otp_code']
+            new_password = serializer.validated_data['new_password']
+
+            try:
+                user = ApexUser.objects.get(email=email)
+            except ApexUser.DoesNotExist:
+                return Response({
+                    'status': 'error',
+                    'message': 'User not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Verify OTP
+            otp_record = OTPVerification.objects.filter(
+                user=user,
+                otp_code=otp_code,
+                verification_type='password_reset',
+                is_used=False,
+                expires_at__gt=timezone.now()
+            ).first()
+
+            if not otp_record:
+                return Response({
+                    'status': 'error',
+                    'message': 'Invalid or expired OTP'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Mark OTP as used
+            otp_record.is_used = True
+            otp_record.save()
+
+            # Update password
+            user.set_password(new_password)
+            user.auth_provider = 'email'  # Update auth provider since they now have a password
+            user.save()
+
+            return Response({
+                'status': 'success',
+                'message': 'Password reset successfully. You can now login with your new password.'
+            })
+
+        return Response({
+            'status': 'error',
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)

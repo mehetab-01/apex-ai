@@ -205,6 +205,49 @@ export default function StudyRoomPage() {
     }
   }, [view, currentRoom?.id]);
 
+  // ===== Heartbeat: keep participant alive while in room =====
+  useEffect(() => {
+    if (view !== "room" || !currentRoom) return;
+
+    const sendHeartbeat = async () => {
+      try {
+        await api.post(`/rooms/${currentRoom.id}/heartbeat/`);
+      } catch (err) {
+        // ignore
+      }
+    };
+
+    // Send immediately on join, then every 10 seconds
+    sendHeartbeat();
+    const hbInterval = setInterval(sendHeartbeat, 10000);
+
+    return () => clearInterval(hbInterval);
+  }, [view, currentRoom?.id]);
+
+  // ===== Auto-leave room on tab close / navigation =====
+  useEffect(() => {
+    if (view !== "room" || !currentRoom) return;
+
+    const handleBeforeUnload = () => {
+      // Use fetch with keepalive for reliable fire-and-forget on tab close
+      const token = localStorage.getItem("apex_access_token");
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/api/rooms/${currentRoom.id}/leave/`;
+
+      fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({}),
+        keepalive: true,
+      }).catch(() => {});
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [view, currentRoom?.id]);
+
   // ===== Timer countdown =====
   useEffect(() => {
     if (currentRoom?.timer_running && currentRoom.timer_started_at) {

@@ -35,9 +35,23 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [countryCode, setCountryCode] = useState("+91");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [otp, setOtp] = useState("");
+
+  const countryCodes = [
+    { code: "+91", label: "🇮🇳 +91", country: "India" },
+    { code: "+1", label: "🇺🇸 +1", country: "US/CA" },
+    { code: "+44", label: "🇬🇧 +44", country: "UK" },
+    { code: "+61", label: "🇦🇺 +61", country: "Australia" },
+    { code: "+971", label: "🇦🇪 +971", country: "UAE" },
+    { code: "+65", label: "🇸🇬 +65", country: "Singapore" },
+    { code: "+49", label: "🇩🇪 +49", country: "Germany" },
+    { code: "+81", label: "🇯🇵 +81", country: "Japan" },
+    { code: "+86", label: "🇨🇳 +86", country: "China" },
+    { code: "+33", label: "🇫🇷 +33", country: "France" },
+  ];
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -84,7 +98,7 @@ export default function RegisterPage() {
         body: JSON.stringify({
           full_name: fullName,
           email: registerMethod === "email" ? email : undefined,
-          phone_number: registerMethod === "phone" ? phone : undefined,
+          phone_number: registerMethod === "phone" ? countryCode + phone.replace(/^\+/, "") : undefined,
           password,
           password_confirm: confirmPassword,
           auth_provider: registerMethod,
@@ -130,7 +144,7 @@ export default function RegisterPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: registerMethod === "email" ? email : undefined,
-          phone_number: registerMethod === "phone" ? phone : undefined,
+          phone_number: registerMethod === "phone" ? countryCode + phone.replace(/^\+/, "") : undefined,
           otp_code: otp,
         }),
       });
@@ -312,16 +326,29 @@ export default function RegisterPage() {
                     <label className="block text-sm font-medium text-gray-400 mb-2">
                       Phone Number
                     </label>
-                    <div className="relative">
-                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                      <input
-                        type="tel"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        required
-                        placeholder="+1234567890"
-                        className="w-full pl-10 pr-4 py-3 bg-apex-darker border border-apex-border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-neon-cyan/50"
-                      />
+                    <div className="flex gap-2">
+                      <select
+                        value={countryCode}
+                        onChange={(e) => setCountryCode(e.target.value)}
+                        className="w-28 py-3 px-2 bg-apex-darker border border-apex-border rounded-lg text-white focus:outline-none focus:border-neon-cyan/50 text-sm"
+                      >
+                        {countryCodes.map((c) => (
+                          <option key={c.code} value={c.code}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="relative flex-1">
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                        <input
+                          type="tel"
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, ""))}
+                          required
+                          placeholder="9876543210"
+                          className="w-full pl-10 pr-4 py-3 bg-apex-darker border border-apex-border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-neon-cyan/50"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}

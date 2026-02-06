@@ -66,23 +66,39 @@ def send_sms_otp(recipient_phone, otp_code):
     """
     Send OTP via SMS using Twilio.
     Returns True if sent successfully, False otherwise.
+    
+    NOTE: Twilio trial accounts can only send SMS to verified phone numbers.
+    Verify numbers at: https://console.twilio.com/us1/develop/phone-numbers/manage/verified
     """
     if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN or not TWILIO_PHONE_NUMBER:
         print('[OTP] Twilio credentials not configured - SMS OTP disabled')
         print(f'[OTP] Would send OTP {otp_code} to {recipient_phone}')
         return False
 
+    # Ensure phone number has country code
+    phone = recipient_phone.strip()
+    if not phone.startswith('+'):
+        phone = '+' + phone
+
     message = f'Your Apex Learning Platform OTP is: {otp_code}. Valid for 10 minutes.'
 
     try:
         client = TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-        client.messages.create(
+        msg = client.messages.create(
             body=message,
             from_=TWILIO_PHONE_NUMBER,
-            to=recipient_phone
+            to=phone
         )
-        print(f'[OTP] SMS sent successfully to {recipient_phone}')
+        print(f'[OTP] SMS sent successfully to {phone} (SID: {msg.sid})')
         return True
     except Exception as e:
-        print(f'[OTP] SMS send failed: {e}')
+        error_msg = str(e)
+        print(f'[OTP] SMS send failed to {phone}: {error_msg}')
+        if 'unverified' in error_msg.lower() or '21608' in error_msg:
+            print(f'[OTP] HINT: Phone number {phone} is not verified in Twilio.')
+            print(f'[OTP] Verify it at: https://console.twilio.com/us1/develop/phone-numbers/manage/verified')
+        elif '21211' in error_msg:
+            print(f'[OTP] HINT: Phone number {phone} is not a valid phone number.')
+        elif '20003' in error_msg:
+            print(f'[OTP] HINT: Twilio authentication failed. Check TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN.')
         return False

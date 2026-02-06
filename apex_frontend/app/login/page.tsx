@@ -28,13 +28,28 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+  const [isGoogleUser, setIsGoogleUser] = useState(false);
+
   // Form states
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [countryCode, setCountryCode] = useState("+91");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
+
+  const countryCodes = [
+    { code: "+91", label: "🇮🇳 +91", country: "India" },
+    { code: "+1", label: "🇺🇸 +1", country: "US/CA" },
+    { code: "+44", label: "🇬🇧 +44", country: "UK" },
+    { code: "+61", label: "🇦🇺 +61", country: "Australia" },
+    { code: "+971", label: "🇦🇪 +971", country: "UAE" },
+    { code: "+65", label: "🇸🇬 +65", country: "Singapore" },
+    { code: "+49", label: "🇩🇪 +49", country: "Germany" },
+    { code: "+81", label: "🇯🇵 +81", country: "Japan" },
+    { code: "+86", label: "🇨🇳 +86", country: "China" },
+    { code: "+33", label: "🇫🇷 +33", country: "France" },
+  ];
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -52,22 +67,29 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
-    
+    setIsGoogleUser(false);
+
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login/email/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      
+
       const data = await response.json();
-      
+
       if (data.status === "error") {
-        setError(data.errors?.non_field_errors?.[0] || data.message || "Login failed");
+        // Check if this is a Google user trying to login with email/password
+        if (data.require_google_signin) {
+          setIsGoogleUser(true);
+          setError("This account was created with Google Sign-In.");
+        } else {
+          setError(data.errors?.non_field_errors?.[0] || data.message || "Login failed");
+        }
       } else {
         // Use auth context login
         login(data.user, data.tokens.access, data.tokens.refresh);
-        
+
         // Redirect based on onboarding status
         if (data.onboarding_completed) {
           router.push("/dashboard");
@@ -83,8 +105,8 @@ export default function LoginPage() {
   };
 
   // Phone login - send OTP
-  const handlePhoneSendOTP = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handlePhoneSendOTP = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setIsLoading(true);
     setError(null);
     
@@ -92,7 +114,7 @@ export default function LoginPage() {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login/phone/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone_number: phone }),
+        body: JSON.stringify({ phone_number: countryCode + phone.replace(/^\+/, "") }),
       });
       
       const data = await response.json();
@@ -101,9 +123,10 @@ export default function LoginPage() {
         setError(data.errors?.phone_number?.[0] || "Failed to send OTP");
       } else {
         setOtpSent(true);
-        // In development, show the OTP
-        if (data.otp_code) {
-          alert(`Development OTP: ${data.otp_code}`);
+        // In debug mode, backend may include debug_otp if SMS delivery failed
+        if (data.debug_otp) {
+          console.log(`[DEV] OTP: ${data.debug_otp}`);
+          setError(`SMS delivery may have failed (Twilio trial limitation). Debug OTP: ${data.debug_otp}`);
         }
       }
     } catch (err) {
@@ -123,7 +146,7 @@ export default function LoginPage() {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/verify-otp/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone_number: phone, otp_code: otp }),
+        body: JSON.stringify({ phone_number: countryCode + phone.replace(/^\+/, ""), otp_code: otp }),
       });
       
       const data = await response.json();
@@ -255,6 +278,28 @@ export default function LoginPage() {
                 className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"
               >
                 {error}
+                {isGoogleUser && (
+                  <div className="mt-3 flex flex-col gap-2">
+                    <button
+                      onClick={handleGoogleLogin}
+                      className="w-full py-2 px-3 bg-white hover:bg-gray-100 text-gray-900 text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-colors"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                      </svg>
+                      Sign in with Google
+                    </button>
+                    <Link
+                      href="/forgot-password"
+                      className="w-full py-2 px-3 bg-apex-card border border-apex-border rounded-lg text-neon-cyan text-sm font-medium text-center hover:bg-apex-border/50 transition-colors"
+                    >
+                      Or set a password
+                    </Link>
+                  </div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -333,17 +378,31 @@ export default function LoginPage() {
                 <label className="block text-sm font-medium text-gray-400 mb-2">
                   Phone Number
                 </label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    required
+                <div className="flex gap-2">
+                  <select
+                    value={countryCode}
+                    onChange={(e) => setCountryCode(e.target.value)}
                     disabled={otpSent}
-                    placeholder="+1234567890"
-                    className="w-full pl-10 pr-4 py-3 bg-apex-darker border border-apex-border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-neon-cyan/50 disabled:opacity-50"
-                  />
+                    className="w-28 py-3 px-2 bg-apex-darker border border-apex-border rounded-lg text-white focus:outline-none focus:border-neon-cyan/50 disabled:opacity-50 text-sm"
+                  >
+                    {countryCodes.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="relative flex-1">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, ""))}
+                      required
+                      disabled={otpSent}
+                      placeholder="9876543210"
+                      className="w-full pl-10 pr-4 py-3 bg-apex-darker border border-apex-border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-neon-cyan/50 disabled:opacity-50"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -369,10 +428,19 @@ export default function LoginPage() {
                     onClick={() => {
                       setOtpSent(false);
                       setOtp("");
+                      setError(null);
                     }}
                     className="mt-2 text-sm text-neon-cyan hover:underline"
                   >
                     Change phone number
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePhoneSendOTP()}
+                    disabled={isLoading}
+                    className="mt-1 text-sm text-gray-400 hover:text-neon-cyan hover:underline"
+                  >
+                    Resend OTP
                   </button>
                 </motion.div>
               )}

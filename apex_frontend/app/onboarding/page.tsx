@@ -39,6 +39,7 @@ export default function OnboardingPage() {
   const router = useRouter();
   const { user, isAuthenticated, isLoading, updateUser } = useAuth();
   const [step, setStep] = useState<"welcome" | "face" | "complete">("welcome");
+  const [onboardingDone, setOnboardingDone] = useState(false);
   
   // Face detection states
   const [validationResult, setValidationResult] = useState<FaceValidationResponse | null>(null);
@@ -58,16 +59,16 @@ export default function OnboardingPage() {
   const detectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Redirect based on auth status
+  // Redirect based on auth status — but NOT if we just finished onboarding here
   useEffect(() => {
-    if (!isLoading) {
+    if (!isLoading && !onboardingDone) {
       if (!isAuthenticated) {
         router.push("/login");
       } else if (user?.onboarding_completed && user?.face_validated) {
         router.push("/dashboard");
       }
     }
-  }, [isAuthenticated, isLoading, user, router]);
+  }, [isAuthenticated, isLoading, user, router, onboardingDone]);
 
   // Start camera
   const startCamera = useCallback(async () => {
@@ -323,6 +324,7 @@ export default function OnboardingPage() {
       if (data.status === "error") {
         setError(data.message);
       } else {
+        setOnboardingDone(true);
         updateUser(data.user);
         setStep("complete");
       }
@@ -592,13 +594,13 @@ export default function OnboardingPage() {
                 {/* Validation result */}
                 {validationResult && (
                   <div className="text-center">
-                    <div className="relative inline-block mb-6">
+                    <div className="relative inline-block mb-8">
                       <img
-                        src={validationResult.preview_image}
+                        src={validationResult.preview_image.startsWith('data:') ? validationResult.preview_image : `data:image/jpeg;base64,${validationResult.preview_image}`}
                         alt="Captured"
                         className="w-64 h-64 rounded-2xl object-cover mx-auto"
                       />
-                      <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full bg-neon-green/20 text-neon-green border border-neon-green/30 flex items-center gap-2">
+                      <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 z-10 px-4 py-2 rounded-full bg-neon-green/20 text-neon-green border border-neon-green/30 flex items-center gap-2 whitespace-nowrap">
                         <Check className="w-4 h-4" />
                         Face Verified
                       </div>
