@@ -2429,6 +2429,7 @@ class RoomTimerView(APIView):
 
             elif action == 'stop' or (action == 'toggle' and room.timer_running):
                 room.timer_running = False
+                room.timer_started_at = None
                 msg = "Timer paused ⏸️"
 
             elif action == 'reset':
@@ -2506,6 +2507,54 @@ class RoomParticipantsView(APIView):
             return Response(
                 {'status': 'error', 'message': 'Room not found'},
                 status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class RoomToggleStatusView(APIView):
+    """
+    POST /api/rooms/<id>/toggle-status/ - Toggle mute or camera for current user.
+    """
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def post(self, request, room_id):
+        """Toggle is_muted or is_camera_on for the requesting participant."""
+        try:
+            room = StudyRoom.objects.get(id=room_id)
+            participant = RoomParticipant.objects.get(
+                room=room, user=request.user, is_active=True
+            )
+
+            field = request.data.get('field')  # 'mute' or 'camera'
+            if field == 'mute':
+                participant.is_muted = not participant.is_muted
+                participant.save(update_fields=['is_muted'])
+                return Response({
+                    'status': 'success',
+                    'is_muted': participant.is_muted,
+                })
+            elif field == 'camera':
+                participant.is_camera_on = not participant.is_camera_on
+                participant.save(update_fields=['is_camera_on'])
+                return Response({
+                    'status': 'success',
+                    'is_camera_on': participant.is_camera_on,
+                })
+            else:
+                return Response(
+                    {'status': 'error', 'message': 'Invalid field. Use mute or camera.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        except StudyRoom.DoesNotExist:
+            return Response(
+                {'status': 'error', 'message': 'Room not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except RoomParticipant.DoesNotExist:
+            return Response(
+                {'status': 'error', 'message': 'You are not in this room'},
+                status=status.HTTP_403_FORBIDDEN
             )
 
 

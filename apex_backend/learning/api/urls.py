@@ -64,4 +64,5 @@ urlpatterns = [
     path('rooms/<uuid:room_id>/messages/', views.RoomChatView.as_view(), name='room_chat'),
     path('rooms/<uuid:room_id>/timer/', views.RoomTimerView.as_view(), name='room_timer'),
     path('rooms/<uuid:room_id>/participants/', views.RoomParticipantsView.as_view(), name='room_participants'),
+    path('rooms/<uuid:room_id>/toggle-status/', views.RoomToggleStatusView.as_view(), name='room_toggle_status'),
 ]

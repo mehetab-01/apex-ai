@@ -157,6 +157,10 @@ export default function StudyRoomPage() {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Media toggle state
+  const [isMuted, setIsMuted] = useState(false);
+  const [isCameraOn, setIsCameraOn] = useState(true);
+
   // Timer state
   const [timerSeconds, setTimerSeconds] = useState(0);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -422,6 +426,30 @@ export default function StudyRoomPage() {
     }
   };
 
+  const toggleMute = async () => {
+    if (!currentRoom) return;
+    try {
+      const res = await api.post(`/rooms/${currentRoom.id}/toggle-status/`, { field: 'mute' });
+      if (res.data.status === 'success') {
+        setIsMuted(res.data.is_muted);
+      }
+    } catch (err) {
+      console.error('Toggle mute error:', err);
+    }
+  };
+
+  const toggleCamera = async () => {
+    if (!currentRoom) return;
+    try {
+      const res = await api.post(`/rooms/${currentRoom.id}/toggle-status/`, { field: 'camera' });
+      if (res.data.status === 'success') {
+        setIsCameraOn(res.data.is_camera_on);
+      }
+    } catch (err) {
+      console.error('Toggle camera error:', err);
+    }
+  };
+
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
@@ -494,6 +522,32 @@ export default function StudyRoomPage() {
                 ) : (
                   <Copy className="w-3.5 h-3.5 text-gray-400" />
                 )}
+              </button>
+
+              {/* Mic Toggle */}
+              <button
+                onClick={toggleMute}
+                className={`p-2 rounded-lg transition-colors ${
+                  isMuted
+                    ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                    : "bg-white/5 text-gray-400 hover:text-white"
+                }`}
+                title={isMuted ? "Unmute" : "Mute"}
+              >
+                {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+              </button>
+
+              {/* Camera Toggle */}
+              <button
+                onClick={toggleCamera}
+                className={`p-2 rounded-lg transition-colors ${
+                  !isCameraOn
+                    ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                    : "bg-white/5 text-gray-400 hover:text-white"
+                }`}
+                title={isCameraOn ? "Turn off camera" : "Turn on camera"}
+              >
+                {isCameraOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
               </button>
 
               {/* Toggle Chat */}
@@ -670,6 +724,18 @@ export default function StudyRoomPage() {
                         <Zap className="w-3 h-3 text-neon-cyan" />
                         {p.focus_points_earned}
                       </span>
+                    </div>
+                    <div className="flex items-center justify-center gap-1.5 mt-1.5">
+                      {p.is_muted ? (
+                        <MicOff className="w-3 h-3 text-red-400" />
+                      ) : (
+                        <Mic className="w-3 h-3 text-neon-green" />
+                      )}
+                      {p.is_camera_on ? (
+                        <Video className="w-3 h-3 text-neon-green" />
+                      ) : (
+                        <VideoOff className="w-3 h-3 text-red-400" />
+                      )}
                     </div>
                   </motion.div>
                 ))}
