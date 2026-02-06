@@ -56,15 +56,20 @@ export default function ChatPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = messagesContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
   };
 
   useEffect(() => {
-    scrollToBottom();
+    // Small delay to ensure DOM has updated before scrolling
+    const timeout = setTimeout(scrollToBottom, 50);
+    return () => clearTimeout(timeout);
   }, [messages]);
 
   // Load conversations on mount if user is logged in
@@ -306,7 +311,7 @@ export default function ChatPage() {
           ) : (
             <>
               {/* Messages Area */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
                 {isLoadingHistory ? (
                   <div className="flex items-center justify-center h-full">
                     <LoadingSpinner />
@@ -470,7 +475,6 @@ export default function ChatPage() {
                       </motion.div>
                     )}
 
-                    <div ref={messagesEndRef} />
                   </>
                 )}
               </div>

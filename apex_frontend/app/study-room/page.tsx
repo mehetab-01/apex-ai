@@ -154,7 +154,7 @@ export default function StudyRoomPage() {
   const [newMessage, setNewMessage] = useState("");
   const [copied, setCopied] = useState(false);
   const [showChat, setShowChat] = useState(true);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Timer state
@@ -227,7 +227,10 @@ export default function StudyRoomPage() {
 
   // ===== Auto-scroll chat =====
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = chatContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
   }, [messages]);
 
   // ===== API Functions =====
@@ -699,7 +702,7 @@ export default function StudyRoomPage() {
                 </div>
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+                <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
                   {messages.map((msg) => (
                     <div key={msg.id}>
                       {msg.message_type === "system" ? (
@@ -733,7 +736,6 @@ export default function StudyRoomPage() {
                       )}
                     </div>
                   ))}
-                  <div ref={chatEndRef} />
                 </div>
 
                 {/* Message Input */}
