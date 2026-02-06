@@ -19,7 +19,6 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-apex-dev-key-change
 DEBUG = True
 
 ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
-print("ALLOWED_HOSTS:", ALLOWED_HOSTS)
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -121,7 +120,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://apex-learning-ai.onrender.com",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -207,6 +205,19 @@ GROQ_API_KEY = os.getenv('GROQ_API_KEY', '')
 # Cohere - Free tier: 1000 calls/month
 # Sign up at: https://dashboard.cohere.com/
 COHERE_API_KEY = os.getenv('COHERE_API_KEY', '')
+
+# ============================================
+# External Course Platform API Keys (Optional)
+# ============================================
+# YouTube Data API - Get from Google Cloud Console
+# Sign up at: https://console.cloud.google.com/apis/credentials
+# Note: If not set, the system will use curated course data
+YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY', '')
+
+# Udemy Affiliate API - Get from Udemy Affiliate Program
+# Sign up at: https://www.udemy.com/affiliate/
+UDEMY_CLIENT_ID = os.getenv('UDEMY_CLIENT_ID', '')
+UDEMY_CLIENT_SECRET = os.getenv('UDEMY_CLIENT_SECRET', '')
 
 # ============================================
 # OpenCV Configuration

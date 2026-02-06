@@ -3,23 +3,24 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { 
-  Search, 
-  Filter, 
-  Grid, 
-  List, 
+import {
+  Search,
+  Filter,
+  Grid,
+  List,
   ChevronDown,
-  Sparkles,
   TrendingUp,
   BookOpen,
   RefreshCw,
   Globe,
-  DollarSign
+  Sparkles,
+  Loader2,
+  Gift
 } from "lucide-react";
 import CourseCard from "@/components/CourseCard";
 import { PageLoader } from "@/components/LoadingSpinner";
 import ErrorDisplay, { EmptyState } from "@/components/ErrorDisplay";
-import { getCourses, getCategories, getPlatforms, type Course } from "@/lib/api";
+import { getCourses, getCategories, getPlatforms, fetchExternalCourses, type Course } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export default function DashboardPage() {
@@ -28,8 +29,11 @@ export default function DashboardPage() {
   const [categories, setCategories] = useState<{ value: string; label: string }[]>([]);
   const [platforms, setPlatforms] = useState<{ value: string; label: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -38,7 +42,7 @@ export default function DashboardPage() {
   const [freeOnly, setFreeOnly] = useState(false);
   const [sortBy, setSortBy] = useState("-average_rating");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  
+
   // Filter dropdown states
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showDifficultyDropdown, setShowDifficultyDropdown] = useState(false);
@@ -63,10 +67,14 @@ export default function DashboardPage() {
     { value: "-total_enrollments", label: "Most Popular" },
   ];
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (reset: boolean = true) => {
+    if (reset) {
+      setLoading(true);
+      setPage(1);
+      setHasMore(true);
+    }
     setError(null);
-    
+
     try {
       const [coursesData, categoriesData, platformsData] = await Promise.all([
         getCourses({
@@ -80,7 +88,7 @@ export default function DashboardPage() {
         getCategories(),
         getPlatforms(),
       ]);
-      
+
       setCourses(coursesData);
       setCategories([{ value: "", label: "All Categories" }, ...categoriesData]);
       setPlatforms([{ value: "", label: "All Platforms" }, ...platformsData]);
@@ -89,6 +97,33 @@ export default function DashboardPage() {
       setError("Failed to load courses. Please check if the backend server is running.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMoreCourses = async () => {
+    setLoadingMore(true);
+
+    try {
+      // Fetch courses from external platforms via the backend API
+      const response = await fetchExternalCourses({
+        platforms: ['youtube', 'udemy', 'coursera', 'nptel', 'cisco'],
+        category: selectedCategory || undefined,
+        count: 3, // 3 courses per platform = ~15 total
+        page: page,
+      });
+
+      if (response.courses && response.courses.length > 0) {
+        setCourses(prev => [...prev, ...response.courses]);
+        setPage(prev => prev + 1);
+        setHasMore(response.has_more);
+      } else {
+        setHasMore(false);
+      }
+    } catch (err) {
+      console.error("Failed to fetch more courses:", err);
+      // Silently fail - user can try again
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -103,7 +138,7 @@ export default function DashboardPage() {
         fetchData();
       }
     }, 500);
-    
+
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
@@ -120,14 +155,14 @@ export default function DashboardPage() {
 
   if (loading && courses.length === 0) {
     return (
-      <div className="min-h-screen pt-24">
+      <div className="min-h-screen py-8">
         <PageLoader />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen pt-20 pb-12">
+    <div className="min-h-screen py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <motion.div
@@ -167,7 +202,7 @@ export default function DashboardPage() {
                   className="w-full pl-10 pr-4 py-2.5 bg-apex-darker border border-apex-border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-neon-cyan/50 transition-colors"
                 />
               </div>
-              
+
               {/* View Toggle - moves to right on larger screens */}
               <div className="flex items-center gap-2 sm:ml-auto">
                 <button
@@ -212,7 +247,7 @@ export default function DashboardPage() {
                   <span>{categories.find(c => c.value === selectedCategory)?.label || "Category"}</span>
                   <ChevronDown className="w-4 h-4" />
                 </button>
-                
+
                 {showCategoryDropdown && (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
@@ -255,7 +290,7 @@ export default function DashboardPage() {
                   <span>{difficulties.find(d => d.value === selectedDifficulty)?.label || "Level"}</span>
                   <ChevronDown className="w-4 h-4" />
                 </button>
-                
+
                 {showDifficultyDropdown && (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
@@ -298,7 +333,7 @@ export default function DashboardPage() {
                   <span>{platforms.find(p => p.value === selectedPlatform)?.label || "Platform"}</span>
                   <ChevronDown className="w-4 h-4" />
                 </button>
-                
+
                 {showPlatformDropdown && (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
@@ -336,7 +371,7 @@ export default function DashboardPage() {
                     : "bg-apex-darker border-apex-border text-gray-300 hover:border-neon-cyan/50"
                 )}
               >
-                <DollarSign className="w-4 h-4" />
+                <Gift className="w-4 h-4" />
                 <span>Free Only</span>
               </button>
 
@@ -354,7 +389,7 @@ export default function DashboardPage() {
                   <span>{sortOptions.find(s => s.value === sortBy)?.label || "Sort"}</span>
                   <ChevronDown className="w-4 h-4" />
                 </button>
-                
+
                 {showSortDropdown && (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
@@ -414,8 +449,8 @@ export default function DashboardPage() {
 
         {/* Error State */}
         {error && (
-          <ErrorDisplay 
-            message={error} 
+          <ErrorDisplay
+            message={error}
             onRetry={fetchData}
           />
         )}
@@ -436,7 +471,7 @@ export default function DashboardPage() {
         {/* Course Grid */}
         {!error && courses.length > 0 && (
           <div className={cn(
-            viewMode === "grid" 
+            viewMode === "grid"
               ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
               : "flex flex-col gap-4"
           )}>
@@ -452,12 +487,36 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Load More (placeholder) */}
-        {courses.length >= 12 && (
+        {/* Load More */}
+        {courses.length >= 6 && hasMore && (
           <div className="text-center mt-12">
-            <button className="neon-button-outline">
-              Load More Courses
+            <button
+              onClick={loadMoreCourses}
+              disabled={loadingMore}
+              className="inline-flex items-center gap-2 px-8 py-3 bg-apex-card border border-neon-cyan/30 rounded-xl text-neon-cyan font-medium hover:bg-neon-cyan/10 hover:border-neon-cyan/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loadingMore ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Loading courses from YouTube, Udemy, Coursera...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5" />
+                  Load More Courses
+                </>
+              )}
             </button>
+            <p className="text-gray-500 text-sm mt-3">
+              Fetches courses from YouTube, Udemy, Coursera, and Cisco
+            </p>
+          </div>
+        )}
+
+        {/* No more courses message */}
+        {!hasMore && courses.length > 0 && (
+          <div className="text-center mt-12">
+            <p className="text-gray-500">You've seen all available courses</p>
           </div>
         )}
       </div>

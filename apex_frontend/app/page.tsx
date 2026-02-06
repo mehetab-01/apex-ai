@@ -2,12 +2,13 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { 
-  GraduationCap, 
-  BookOpen, 
-  Eye, 
-  Briefcase, 
-  Brain, 
+import { useState, useEffect, useRef } from "react";
+import {
+  GraduationCap,
+  BookOpen,
+  Eye,
+  Briefcase,
+  Brain,
   ChevronRight,
   Play,
   Sparkles,
@@ -76,15 +77,127 @@ const testimonials = [
     image: "https://i.pravatar.cc/100?img=3",
     content: "Finally, an e-learning platform that understands how people actually learn. The personalization is next level.",
   },
+  {
+    name: "David Kim",
+    role: "Full Stack Developer",
+    image: "https://i.pravatar.cc/100?img=4",
+    content: "The AI tutor is like having a personal mentor available 24/7. It helped me master React in half the time.",
+  },
+  {
+    name: "Lisa Thompson",
+    role: "UX Designer at Meta",
+    image: "https://i.pravatar.cc/100?img=5",
+    content: "Career guidance feature analyzed my skills perfectly and suggested the exact courses I needed for my promotion.",
+  },
+  {
+    name: "James Wilson",
+    role: "Machine Learning Engineer",
+    image: "https://i.pravatar.cc/100?img=6",
+    content: "Best investment in my education. The focus tracking keeps me accountable and the AI recommendations are spot-on.",
+  },
 ];
 
 export default function HomePage() {
   const { isAuthenticated } = useAuth();
+  const [isPaused, setIsPaused] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [scrollPosition, setScrollPosition] = useState(0);
+  const dragStartX = useRef(0);
+  const scrollStartPosition = useRef(0);
+
+  // Duplicate testimonials for infinite scroll effect
+  const duplicatedTestimonials = [...testimonials, ...testimonials, ...testimonials];
+
+  // Auto-scroll effect
+  useEffect(() => {
+    if (isPaused || isDragging) return;
+
+    const scrollSpeed = 1; // pixels per frame
+    let animationId: number;
+
+    const animate = () => {
+      if (scrollRef.current) {
+        const container = scrollRef.current;
+        const maxScroll = container.scrollWidth / 3; // One set of testimonials
+
+        setScrollPosition((prev) => {
+          const newPosition = prev + scrollSpeed;
+          // Reset to beginning when we've scrolled through one full set
+          if (newPosition >= maxScroll) {
+            return 0;
+          }
+          return newPosition;
+        });
+      }
+      animationId = requestAnimationFrame(animate);
+    };
+
+    animationId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationId);
+  }, [isPaused, isDragging]);
+
+  // Apply scroll position
+  useEffect(() => {
+    if (scrollRef.current && !isDragging) {
+      scrollRef.current.scrollLeft = scrollPosition;
+    }
+  }, [scrollPosition, isDragging]);
+
+  // Mouse drag handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    dragStartX.current = e.clientX;
+    scrollStartPosition.current = scrollRef.current?.scrollLeft || 0;
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !scrollRef.current) return;
+    const delta = dragStartX.current - e.clientX;
+    scrollRef.current.scrollLeft = scrollStartPosition.current + delta;
+  };
+
+  const handleMouseUp = () => {
+    if (isDragging && scrollRef.current) {
+      setScrollPosition(scrollRef.current.scrollLeft);
+    }
+    setIsDragging(false);
+  };
+
+  const handleMouseLeave = () => {
+    if (isDragging && scrollRef.current) {
+      setScrollPosition(scrollRef.current.scrollLeft);
+    }
+    setIsDragging(false);
+    setIsPaused(false);
+  };
+
+  // Touch handlers for mobile
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setIsDragging(true);
+    setIsPaused(true);
+    dragStartX.current = e.touches[0].clientX;
+    scrollStartPosition.current = scrollRef.current?.scrollLeft || 0;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || !scrollRef.current) return;
+    const delta = dragStartX.current - e.touches[0].clientX;
+    scrollRef.current.scrollLeft = scrollStartPosition.current + delta;
+  };
+
+  const handleTouchEnd = () => {
+    if (isDragging && scrollRef.current) {
+      setScrollPosition(scrollRef.current.scrollLeft);
+    }
+    setIsDragging(false);
+    setIsPaused(false);
+  };
 
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
+      <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
         {/* Animated Background */}
         <div className="absolute inset-0">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-neon-cyan/10 via-transparent to-transparent" />
@@ -331,8 +444,8 @@ export default function HomePage() {
                 className="relative"
               >
                 <div className="text-6xl font-bold text-white/5 absolute -top-4 left-0">{item.step}</div>
-                <div className="relative pt-8">
-                  <div className="w-14 h-14 rounded-xl bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center mb-5">
+                <div className="relative pt-14">
+                  <div className="w-14 h-14 rounded-xl bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center mb-5 mt-2">
                     <item.icon className="w-7 h-7 text-neon-cyan" />
                   </div>
                   <h3 className="text-xl font-semibold text-white mb-3">{item.title}</h3>
@@ -345,7 +458,7 @@ export default function HomePage() {
       </section>
 
       {/* Testimonials Section */}
-      <section className="py-24">
+      <section className="py-24 overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -359,35 +472,55 @@ export default function HomePage() {
             </h2>
           </motion.div>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {testimonials.map((testimonial, index) => (
-              <motion.div
-                key={testimonial.name}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.1 }}
-                className="p-6 rounded-2xl bg-white/[0.02] border border-white/5"
-              >
-                <div className="flex items-center gap-1 mb-4">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="w-4 h-4 fill-yellow-500 text-yellow-500" />
-                  ))}
-                </div>
-                <p className="text-gray-300 mb-6 leading-relaxed">"{testimonial.content}"</p>
-                <div className="flex items-center gap-3">
-                  <img
-                    src={testimonial.image}
-                    alt={testimonial.name}
-                    className="w-10 h-10 rounded-full"
-                  />
-                  <div>
-                    <div className="font-medium text-white">{testimonial.name}</div>
-                    <div className="text-sm text-gray-500">{testimonial.role}</div>
+          {/* Infinite Scroll Carousel */}
+          <div
+            className="relative"
+            onMouseEnter={() => setIsPaused(true)}
+            onMouseLeave={handleMouseLeave}
+          >
+            {/* Gradient Overlays */}
+            <div className="absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-apex-dark to-transparent z-10 pointer-events-none" />
+            <div className="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-apex-dark to-transparent z-10 pointer-events-none" />
+
+            {/* Scrollable Container */}
+            <div
+              ref={scrollRef}
+              className={`flex gap-6 overflow-x-hidden pb-4 ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
+              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
+              {duplicatedTestimonials.map((testimonial, index) => (
+                <div
+                  key={`${testimonial.name}-${index}`}
+                  className="flex-shrink-0 w-[320px] p-6 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-neon-cyan/30 transition-all select-none"
+                >
+                  <div className="flex items-center gap-1 mb-4">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="w-4 h-4 fill-yellow-500 text-yellow-500" />
+                    ))}
+                  </div>
+                  <p className="text-gray-300 mb-6 leading-relaxed select-none">"{testimonial.content}"</p>
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={testimonial.image}
+                      alt={testimonial.name}
+                      className="w-10 h-10 rounded-full pointer-events-none"
+                      draggable={false}
+                    />
+                    <div>
+                      <div className="font-medium text-white select-none">{testimonial.name}</div>
+                      <div className="text-sm text-gray-500 select-none">{testimonial.role}</div>
+                    </div>
                   </div>
                 </div>
-              </motion.div>
-            ))}
+              ))}
+            </div>
+
           </div>
         </div>
       </section>
@@ -407,13 +540,9 @@ export default function HomePage() {
             <div className="absolute inset-0 border border-white/10 rounded-3xl" />
             
             <div className="relative z-10">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-                className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center"
-              >
+              <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center">
                 <Zap className="w-8 h-8 text-neon-cyan" />
-              </motion.div>
+              </div>
               
               <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
                 Ready to Transform Your Learning?
@@ -444,62 +573,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-white/5 py-12 bg-apex-darker/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-4 gap-8 mb-8">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="p-2 rounded-lg bg-neon-cyan">
-                  <GraduationCap className="w-5 h-5 text-black" />
-                </div>
-                <span className="font-bold text-white text-lg">APEX</span>
-              </div>
-              <p className="text-sm text-gray-500">
-                AI-powered learning platform designed to help you reach your full potential.
-              </p>
-            </div>
-            
-            <div>
-              <h4 className="font-medium text-white mb-4">Platform</h4>
-              <ul className="space-y-2 text-sm text-gray-500">
-                <li><Link href="/dashboard" className="hover:text-white transition-colors">Dashboard</Link></li>
-                <li><Link href="/focus-mode" className="hover:text-white transition-colors">Focus Mode</Link></li>
-                <li><Link href="/career" className="hover:text-white transition-colors">Career</Link></li>
-                <li><Link href="/chat" className="hover:text-white transition-colors">AI Guide</Link></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h4 className="font-medium text-white mb-4">Company</h4>
-              <ul className="space-y-2 text-sm text-gray-500">
-                <li><Link href="#" className="hover:text-white transition-colors">About</Link></li>
-                <li><Link href="#" className="hover:text-white transition-colors">Careers</Link></li>
-                <li><Link href="#" className="hover:text-white transition-colors">Blog</Link></li>
-                <li><Link href="#" className="hover:text-white transition-colors">Contact</Link></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h4 className="font-medium text-white mb-4">Legal</h4>
-              <ul className="space-y-2 text-sm text-gray-500">
-                <li><Link href="#" className="hover:text-white transition-colors">Privacy Policy</Link></li>
-                <li><Link href="#" className="hover:text-white transition-colors">Terms of Service</Link></li>
-                <li><Link href="#" className="hover:text-white transition-colors">Cookie Policy</Link></li>
-              </ul>
-            </div>
-          </div>
-          
-          <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-gray-500">
-              © 2026 Apex Learning Platform. All rights reserved.
-            </p>
-            <div className="flex items-center gap-4 text-sm text-gray-500">
-              <span>Made with ❤️ for learners everywhere</span>
-            </div>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

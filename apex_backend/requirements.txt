@@ -64,3 +64,4 @@ uritemplate==4.2.0
 urllib3==2.6.3
 sib-api-v3-sdk
 twilio
+mediapipe>=0.10.0

@@ -32,10 +32,10 @@ const platformConfig: Record<string, { color: string; bgColor: string; image: st
     bgColor: "bg-orange-500/20 border-orange-500/30",
     image: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=400&h=200&fit=crop"
   },
-  nptel: { 
-    color: "text-yellow-400", 
+  nptel: {
+    color: "text-yellow-400",
     bgColor: "bg-yellow-500/20 border-yellow-500/30",
-    image: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=400&h=200&fit=crop"
+    image: "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=400&h=200&fit=crop"
   },
   cisco: { 
     color: "text-cyan-400", 

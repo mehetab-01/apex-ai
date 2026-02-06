@@ -16,6 +16,9 @@ interface User {
   branch?: string;
   interests?: string[];
   bio?: string;
+  focus_points?: number;
+  total_focus_time_minutes?: number;
+  courses_completed?: number;
 }
 
 interface AuthContextType {
@@ -113,10 +116,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("Logout error:", error);
     }
 
-    // Clear local storage
+    // Clear local storage and session storage
     localStorage.removeItem("apex_user");
     localStorage.removeItem("apex_access_token");
     localStorage.removeItem("apex_refresh_token");
+    localStorage.removeItem("apex_chat_state"); // Clear chat state on logout
+    sessionStorage.removeItem("apex_chat_session_info"); // Clear session for fresh start on next login
     setUser(null);
     router.push("/login");
   };

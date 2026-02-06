@@ -282,7 +282,7 @@ export default function SettingsPage() {
 
   if (authLoading || isLoading) {
     return (
-      <div className="min-h-screen pt-20 flex items-center justify-center">
+      <div className="min-h-screen py-8 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-8 h-8 text-neon-cyan animate-spin mx-auto mb-4" />
           <p className="text-gray-400">Loading your profile...</p>
@@ -297,7 +297,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen pt-20 pb-12">
+    <div className="min-h-screen py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <motion.div

@@ -188,26 +188,30 @@ class CompleteOnboardingSerializer(serializers.Serializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     """Serializer for user profile display."""
-    
+
     display_name = serializers.SerializerMethodField()
     profile_picture_url = serializers.SerializerMethodField()
     display_picture_url = serializers.SerializerMethodField()
-    
+    # Add fields that frontend expects (profile_picture and display_picture as URLs)
+    profile_picture = serializers.SerializerMethodField()
+    display_picture = serializers.SerializerMethodField()
+
     class Meta:
         model = ApexUser
         fields = [
             'id', 'email', 'phone_number', 'full_name',
             'display_name', 'profile_picture_url', 'display_picture_url',
+            'profile_picture', 'display_picture',
             'college', 'branch', 'interests', 'bio',
             'face_validated', 'is_verified', 'onboarding_completed',
             'auth_provider', 'focus_points', 'total_focus_time_minutes',
             'courses_completed', 'created_at'
         ]
         read_only_fields = ['id', 'face_validated', 'is_verified', 'created_at']
-    
+
     def get_display_name(self, obj):
         return obj.get_display_name()
-    
+
     def get_profile_picture_url(self, obj):
         if obj.profile_picture:
             request = self.context.get('request')
@@ -215,7 +219,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.profile_picture.url)
             return obj.profile_picture.url
         return None
-    
+
     def get_display_picture_url(self, obj):
         """Get the display picture URL. Falls back to profile picture if not set."""
         if obj.display_picture:
@@ -225,6 +229,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
             return obj.display_picture.url
         # Fall back to profile picture if display picture not set
         return self.get_profile_picture_url(obj)
+
+    def get_profile_picture(self, obj):
+        """Return profile picture URL for frontend compatibility."""
+        return self.get_profile_picture_url(obj)
+
+    def get_display_picture(self, obj):
+        """Return display picture URL for frontend compatibility."""
+        return self.get_display_picture_url(obj)
 
 
 class UserProfileUpdateSerializer(serializers.ModelSerializer):
