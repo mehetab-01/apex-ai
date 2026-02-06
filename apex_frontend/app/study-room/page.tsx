@@ -34,6 +34,9 @@ import {
   Target,
   Coffee,
   ChevronDown,
+  Volume2,
+  VolumeX,
+  PhoneOff,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
@@ -50,6 +53,7 @@ interface Participant {
   is_active: boolean;
   is_muted: boolean;
   is_camera_on: boolean;
+  peer_id: string;
   focus_time_minutes: number;
   focus_points_earned: number;
   joined_at: string;
@@ -161,6 +165,7 @@ export default function StudyRoomPage() {
   // Media toggle state (default OFF — only ask permission)
   const [isMuted, setIsMuted] = useState(true);
   const [isCameraOn, setIsCameraOn] = useState(false);
+  const [isDeafened, setIsDeafened] = useState(false);
 
   // Speech detection state
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -171,6 +176,15 @@ export default function StudyRoomPage() {
   // Camera stream state
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  // WebRTC / PeerJS state
+  const [mediaReady, setMediaReady] = useState(false);
+  const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
+  const peerRef = useRef<any>(null);
+  const myPeerIdRef = useRef<string | null>(null);
+  const connectedPeerIdsRef = useRef<Set<string>>(new Set());
+  const mediaConnectionsRef = useRef<Map<string, any>>(new Map());
+  const wasMutedBeforeDeafenRef = useRef(true);
 
   // Timer state
   const [timerSeconds, setTimerSeconds] = useState(0);
@@ -353,16 +367,18 @@ export default function StudyRoomPage() {
 
     const requestPermissions = async () => {
       try {
-        // Ask for both permissions once, tracks start disabled
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } },
+          audio: { echoCancellation: true, noiseSuppression: true },
+        });
         if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
-        // Store video stream, disable tracks by default
         stream.getVideoTracks().forEach(t => (t.enabled = false));
         stream.getAudioTracks().forEach(t => (t.enabled = false));
         cameraStreamRef.current = stream;
       } catch (err) {
         console.warn("Media permission denied or unavailable:", err);
       }
+      if (!cancelled) setMediaReady(true);
     };
 
     if (view === "room") {
@@ -371,6 +387,7 @@ export default function StudyRoomPage() {
 
     return () => {
       cancelled = true;
+      setMediaReady(false);
       if (cameraStreamRef.current) {
         cameraStreamRef.current.getTracks().forEach(t => t.stop());
         cameraStreamRef.current = null;
@@ -389,6 +406,156 @@ export default function StudyRoomPage() {
       localVideoRef.current.srcObject = null;
     }
   }, [isCameraOn]);
+
+  // ===== PeerJS lifecycle — create peer when media ready =====
+  useEffect(() => {
+    if (view !== "room" || !mediaReady || !currentRoom) return;
+    let destroyed = false;
+
+    const initPeer = async () => {
+      try {
+        const { default: Peer } = await import("peerjs");
+        if (destroyed) return;
+
+        const peer = new Peer({
+          config: {
+            iceServers: [
+              { urls: "stun:stun.l.google.com:19302" },
+              { urls: "stun:stun1.l.google.com:19302" },
+            ],
+          },
+        });
+        peerRef.current = peer;
+
+        peer.on("open", async (id: string) => {
+          if (destroyed) return;
+          myPeerIdRef.current = id;
+          try {
+            await api.post(`/rooms/${currentRoom.id}/toggle-status/`, {
+              field: "peer_id",
+              value: id,
+            });
+          } catch (err) {
+            console.error("Failed to store peer ID:", err);
+          }
+        });
+
+        peer.on("call", (call: any) => {
+          if (destroyed) return;
+          const localStream = cameraStreamRef.current;
+          if (localStream) {
+            call.answer(localStream);
+          } else {
+            call.answer();
+          }
+
+          call.on("stream", (remoteStream: MediaStream) => {
+            if (destroyed) return;
+            const remotePeerId = call.peer;
+            setRemoteStreams((prev) => ({ ...prev, [remotePeerId]: remoteStream }));
+            connectedPeerIdsRef.current.add(remotePeerId);
+            mediaConnectionsRef.current.set(remotePeerId, call);
+          });
+
+          call.on("close", () => {
+            const remotePeerId = call.peer;
+            setRemoteStreams((prev) => {
+              const next = { ...prev };
+              delete next[remotePeerId];
+              return next;
+            });
+            connectedPeerIdsRef.current.delete(remotePeerId);
+            mediaConnectionsRef.current.delete(remotePeerId);
+          });
+
+          call.on("error", (err: any) => {
+            console.error("Incoming call error:", err);
+          });
+        });
+
+        peer.on("error", (err: any) => {
+          console.error("Peer error:", err);
+        });
+      } catch (err) {
+        console.error("Failed to initialize PeerJS:", err);
+      }
+    };
+
+    initPeer();
+
+    return () => {
+      destroyed = true;
+      myPeerIdRef.current = null;
+      mediaConnectionsRef.current.forEach((conn) => conn.close());
+      mediaConnectionsRef.current.clear();
+      connectedPeerIdsRef.current.clear();
+      setRemoteStreams({});
+      if (peerRef.current) {
+        peerRef.current.destroy();
+        peerRef.current = null;
+      }
+    };
+  }, [view, mediaReady]);
+
+  // ===== Connect to new peers discovered via polling =====
+  useEffect(() => {
+    if (view !== "room" || !peerRef.current || !myPeerIdRef.current) return;
+
+    const peer = peerRef.current;
+    const myPeerId = myPeerIdRef.current;
+    const localStream = cameraStreamRef.current;
+
+    currentRoom?.participants?.forEach((p) => {
+      const remotePeerId = p.peer_id;
+      if (
+        !remotePeerId ||
+        remotePeerId === myPeerId ||
+        connectedPeerIdsRef.current.has(remotePeerId)
+      )
+        return;
+
+      if (!localStream) return;
+
+      connectedPeerIdsRef.current.add(remotePeerId);
+      const call = peer.call(remotePeerId, localStream);
+
+      if (!call) {
+        connectedPeerIdsRef.current.delete(remotePeerId);
+        return;
+      }
+
+      mediaConnectionsRef.current.set(remotePeerId, call);
+
+      call.on("stream", (remoteStream: MediaStream) => {
+        setRemoteStreams((prev) => ({ ...prev, [remotePeerId]: remoteStream }));
+      });
+
+      call.on("close", () => {
+        setRemoteStreams((prev) => {
+          const next = { ...prev };
+          delete next[remotePeerId];
+          return next;
+        });
+        connectedPeerIdsRef.current.delete(remotePeerId);
+        mediaConnectionsRef.current.delete(remotePeerId);
+      });
+
+      call.on("error", (err: any) => {
+        console.error("Outgoing call error:", err);
+        connectedPeerIdsRef.current.delete(remotePeerId);
+        mediaConnectionsRef.current.delete(remotePeerId);
+      });
+    });
+  }, [view, currentRoom?.participants]);
+
+  // ===== Apply deafen state to all remote audio =====
+  useEffect(() => {
+    Object.values(remoteStreams).forEach((stream) => {
+      stream.getAudioTracks().forEach((t) => {
+        t.enabled = !isDeafened;
+      });
+    });
+  }, [remoteStreams, isDeafened]);
 
   // ===== Auto-scroll chat =====
   useEffect(() => {
@@ -612,6 +779,21 @@ export default function StudyRoomPage() {
     }
   };
 
+  const toggleDeafen = async () => {
+    if (!isDeafened) {
+      wasMutedBeforeDeafenRef.current = isMuted;
+      if (!isMuted) {
+        await toggleMute();
+      }
+      setIsDeafened(true);
+    } else {
+      setIsDeafened(false);
+      if (!wasMutedBeforeDeafenRef.current && isMuted) {
+        await toggleMute();
+      }
+    }
+  };
+
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
@@ -643,20 +825,20 @@ export default function StudyRoomPage() {
     return (
       <div className="min-h-screen bg-apex-dark flex flex-col">
         {/* Room Header */}
-        <div className="bg-apex-darker border-b border-white/5 px-4 py-3">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-3">
+        <div className="bg-apex-darker border-b border-white/5 px-3 sm:px-4 py-2 sm:py-3">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
               <button
                 onClick={leaveRoom}
-                className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
+                className="p-1.5 sm:p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors flex-shrink-0"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h1 className="text-lg font-bold text-white">{currentRoom.name}</h1>
+                  <h1 className="text-sm sm:text-lg font-bold text-white truncate">{currentRoom.name}</h1>
                   <span
-                    className={`text-xs px-2 py-0.5 rounded-full ${
+                    className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full flex-shrink-0 ${
                       currentRoom.status === "active"
                         ? "bg-neon-green/20 text-neon-green"
                         : "bg-yellow-500/20 text-yellow-400"
@@ -665,20 +847,21 @@ export default function StudyRoomPage() {
                     {currentRoom.status_display}
                   </span>
                 </div>
-                <p className="text-xs text-gray-500">
+                <p className="text-[10px] sm:text-xs text-gray-500 truncate">
                   {currentRoom.category_display} • {currentRoom.participant_count}/{currentRoom.max_participants} participants
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
               {/* Room Code */}
               <button
                 onClick={copyRoomCode}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:border-neon-cyan/30 transition-colors text-sm"
+                className="flex items-center gap-1.5 sm:gap-2 p-1.5 sm:px-3 sm:py-1.5 rounded-lg bg-white/5 border border-white/10 hover:border-neon-cyan/30 transition-colors text-sm"
+                title={`Room code: ${currentRoom.room_code}`}
               >
                 <Hash className="w-3.5 h-3.5 text-neon-cyan" />
-                <span className="font-mono text-white">{currentRoom.room_code}</span>
+                <span className="hidden sm:inline font-mono text-white">{currentRoom.room_code}</span>
                 {copied ? (
                   <Check className="w-3.5 h-3.5 text-neon-green" />
                 ) : (
@@ -689,69 +872,85 @@ export default function StudyRoomPage() {
               {/* Mic Toggle */}
               <button
                 onClick={toggleMute}
-                className={`p-2 rounded-lg transition-colors ${
+                disabled={isDeafened}
+                className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
                   isMuted
                     ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
                     : "bg-white/5 text-gray-400 hover:text-white"
-                }`}
-                title={isMuted ? "Unmute" : "Mute"}
+                } ${isDeafened ? "opacity-50 cursor-not-allowed" : ""}`}
+                title={isDeafened ? "Undeafen first" : isMuted ? "Unmute" : "Mute"}
               >
-                {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                {isMuted ? <MicOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Mic className="w-4 h-4 sm:w-5 sm:h-5" />}
               </button>
 
               {/* Camera Toggle */}
               <button
                 onClick={toggleCamera}
-                className={`p-2 rounded-lg transition-colors ${
+                className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
                   !isCameraOn
                     ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
                     : "bg-white/5 text-gray-400 hover:text-white"
                 }`}
                 title={isCameraOn ? "Turn off camera" : "Turn on camera"}
               >
-                {isCameraOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+                {isCameraOn ? <Video className="w-4 h-4 sm:w-5 sm:h-5" /> : <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" />}
+              </button>
+
+              {/* Deafen Toggle */}
+              <button
+                onClick={toggleDeafen}
+                className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
+                  isDeafened
+                    ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                    : "bg-white/5 text-gray-400 hover:text-white"
+                }`}
+                title={isDeafened ? "Undeafen" : "Deafen"}
+              >
+                {isDeafened ? <VolumeX className="w-4 h-4 sm:w-5 sm:h-5" /> : <Volume2 className="w-4 h-4 sm:w-5 sm:h-5" />}
               </button>
 
               {/* Toggle Chat */}
               <button
                 onClick={() => setShowChat(!showChat)}
-                className={`p-2 rounded-lg transition-colors ${
+                className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
                   showChat ? "bg-neon-cyan/20 text-neon-cyan" : "bg-white/5 text-gray-400 hover:text-white"
                 }`}
               >
-                <MessageCircle className="w-5 h-5" />
+                <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
 
               {/* End Room (Host) */}
               {isHost && (
                 <button
                   onClick={endRoom}
-                  className="px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 text-sm transition-colors"
+                  className="p-1.5 sm:px-3 sm:py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 text-sm transition-colors"
+                  title="End Room"
                 >
-                  End Room
+                  <PhoneOff className="w-4 h-4 sm:hidden" />
+                  <span className="hidden sm:inline">End Room</span>
                 </button>
               )}
 
               {/* Leave */}
               <button
                 onClick={leaveRoom}
-                className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+                className="p-1.5 sm:p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
               >
-                <LogOut className="w-5 h-5" />
+                <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             </div>
           </div>
         </div>
 
         {/* Room Content */}
-        <div className="flex-1 flex max-w-7xl mx-auto w-full">
+        <div className="flex-1 flex flex-col md:flex-row max-w-7xl mx-auto w-full">
           {/* Main Area - Timer & Participants */}
-          <div className={`flex-1 flex flex-col p-6 ${showChat ? "border-r border-white/5" : ""}`}>
+          <div className={`flex-1 flex flex-col p-3 sm:p-6 ${showChat ? "md:border-r md:border-white/5" : ""}`}>
             {/* Pomodoro Timer */}
-            <div className="flex flex-col items-center mb-8">
+            <div className="flex flex-col items-center mb-6 sm:mb-8">
               <div className="relative">
                 {/* Timer Circle */}
-                <div className="w-56 h-56 rounded-full border-4 border-white/10 flex items-center justify-center relative">
+                <div className="w-40 h-40 sm:w-56 sm:h-56 rounded-full border-4 border-white/10 flex items-center justify-center relative">
                   {/* Progress ring */}
                   <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 224 224">
                     <circle
@@ -785,21 +984,21 @@ export default function StudyRoomPage() {
                   </svg>
 
                   <div className="text-center z-10">
-                    <p className="text-5xl font-mono font-bold text-white">
+                    <p className="text-3xl sm:text-5xl font-mono font-bold text-white">
                       {formatTime(timerSeconds)}
                     </p>
-                    <p className={`text-sm mt-1 ${currentRoom.is_break ? "text-neon-green" : "text-neon-cyan"}`}>
+                    <p className={`text-xs sm:text-sm mt-1 ${currentRoom.is_break ? "text-neon-green" : "text-neon-cyan"}`}>
                       {currentRoom.is_break ? (
                         <span className="flex items-center gap-1 justify-center">
-                          <Coffee className="w-3.5 h-3.5" /> Break Time
+                          <Coffee className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> Break
                         </span>
                       ) : (
                         <span className="flex items-center gap-1 justify-center">
-                          <Target className="w-3.5 h-3.5" /> Focus Time
+                          <Target className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> Focus
                         </span>
                       )}
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-[10px] sm:text-xs text-gray-500 mt-1">
                       Round {currentRoom.current_round} / {currentRoom.pomodoro_rounds}
                     </p>
                   </div>
@@ -808,17 +1007,17 @@ export default function StudyRoomPage() {
 
               {/* Timer Controls (Host only) */}
               {isHost && (
-                <div className="flex items-center gap-3 mt-6">
+                <div className="flex items-center gap-3 mt-4 sm:mt-6">
                   <button
                     onClick={() => controlTimer("reset")}
-                    className="p-2.5 rounded-full bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                    className="p-2 sm:p-2.5 rounded-full bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
                     title="Reset"
                   >
-                    <RotateCcw className="w-5 h-5" />
+                    <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
                   </button>
                   <button
                     onClick={() => controlTimer("toggle")}
-                    className={`p-4 rounded-full transition-all ${
+                    className={`p-3 sm:p-4 rounded-full transition-all ${
                       currentRoom.timer_running
                         ? "bg-orange-500/20 text-orange-400 hover:bg-orange-500/30"
                         : "bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30"
@@ -826,23 +1025,23 @@ export default function StudyRoomPage() {
                     title={currentRoom.timer_running ? "Pause" : "Start"}
                   >
                     {currentRoom.timer_running ? (
-                      <Pause className="w-6 h-6" />
+                      <Pause className="w-5 h-5 sm:w-6 sm:h-6" />
                     ) : (
-                      <Play className="w-6 h-6" />
+                      <Play className="w-5 h-5 sm:w-6 sm:h-6" />
                     )}
                   </button>
                   <button
                     onClick={() => controlTimer("next_round")}
-                    className="p-2.5 rounded-full bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                    className="p-2 sm:p-2.5 rounded-full bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
                     title="Next Round"
                   >
-                    <SkipForward className="w-5 h-5" />
+                    <SkipForward className="w-4 h-4 sm:w-5 sm:h-5" />
                   </button>
                 </div>
               )}
 
               {!isHost && (
-                <p className="text-xs text-gray-500 mt-4">
+                <p className="text-[10px] sm:text-xs text-gray-500 mt-3 sm:mt-4">
                   Only the host can control the timer
                 </p>
               )}
@@ -850,14 +1049,17 @@ export default function StudyRoomPage() {
 
             {/* Participants Grid */}
             <div className="mt-auto">
-              <h3 className="text-sm font-medium text-gray-400 mb-3 flex items-center gap-2">
-                <Users className="w-4 h-4" />
+              <h3 className="text-xs sm:text-sm font-medium text-gray-400 mb-2 sm:mb-3 flex items-center gap-2">
+                <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 Participants ({currentRoom.participants?.length || 0})
               </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3">
                 {currentRoom.participants?.map((p) => {
                   const isMe = p.user_id === user?.id;
-                  const showVideo = isMe && isCameraOn;
+                  const showLocalVideo = isMe && isCameraOn;
+                  const remotePeerId = !isMe ? p.peer_id : null;
+                  const remoteStream = remotePeerId ? remoteStreams[remotePeerId] : null;
+                  const showRemoteVideo = !isMe && remoteStream && p.is_camera_on;
 
                   return (
                     <motion.div
@@ -868,10 +1070,25 @@ export default function StudyRoomPage() {
                         isMe && isSpeaking && !isMuted
                           ? "border-neon-green shadow-[0_0_12px_rgba(0,255,136,0.4)]"
                           : "border-white/5"
-                      } ${showVideo ? "bg-black" : "bg-apex-card p-4"}`}
+                      } ${showLocalVideo || showRemoteVideo ? "bg-black" : "bg-apex-card p-3 sm:p-4"}`}
                     >
-                      {/* Live video mode — full card becomes the feed */}
-                      {showVideo ? (
+                      {/* Hidden audio element for remote stream (plays audio even when no video shown) */}
+                      {remoteStream && !showRemoteVideo && (
+                        <video
+                          ref={(el) => {
+                            if (el && el.srcObject !== remoteStream) {
+                              el.srcObject = remoteStream;
+                              el.play().catch(() => {});
+                            }
+                          }}
+                          autoPlay
+                          playsInline
+                          className="sr-only"
+                        />
+                      )}
+
+                      {/* Local camera video */}
+                      {showLocalVideo ? (
                         <>
                           <div className="aspect-[4/3] w-full relative">
                             <video
@@ -886,14 +1103,43 @@ export default function StudyRoomPage() {
                               muted
                               className="w-full h-full object-cover scale-x-[-1]"
                             />
-                            {/* Host crown overlay */}
                             {p.user_id === currentRoom.host_id && (
                               <Crown className="w-4 h-4 text-yellow-400 absolute top-2 right-2 drop-shadow-lg" />
                             )}
                           </div>
-                          {/* Name & status bar at bottom */}
-                          <div className="bg-apex-darker/90 px-3 py-2 flex items-center justify-between">
-                            <p className="text-xs font-medium text-white truncate">{p.user_name}</p>
+                          <div className="bg-apex-darker/90 px-2 sm:px-3 py-1.5 sm:py-2 flex items-center justify-between">
+                            <p className="text-[10px] sm:text-xs font-medium text-white truncate">{p.user_name} (You)</p>
+                            <div className="flex items-center gap-1.5">
+                              {p.is_muted ? (
+                                <MicOff className="w-3 h-3 text-red-400" />
+                              ) : (
+                                <Mic className="w-3 h-3 text-neon-green" />
+                              )}
+                              <Video className="w-3 h-3 text-neon-green" />
+                            </div>
+                          </div>
+                        </>
+                      ) : showRemoteVideo ? (
+                        /* Remote camera video */
+                        <>
+                          <div className="aspect-[4/3] w-full relative">
+                            <video
+                              ref={(el) => {
+                                if (el && remoteStream && el.srcObject !== remoteStream) {
+                                  el.srcObject = remoteStream;
+                                  el.play().catch(() => {});
+                                }
+                              }}
+                              autoPlay
+                              playsInline
+                              className="w-full h-full object-cover"
+                            />
+                            {p.user_id === currentRoom.host_id && (
+                              <Crown className="w-4 h-4 text-yellow-400 absolute top-2 right-2 drop-shadow-lg" />
+                            )}
+                          </div>
+                          <div className="bg-apex-darker/90 px-2 sm:px-3 py-1.5 sm:py-2 flex items-center justify-between">
+                            <p className="text-[10px] sm:text-xs font-medium text-white truncate">{p.user_name}</p>
                             <div className="flex items-center gap-1.5">
                               {p.is_muted ? (
                                 <MicOff className="w-3 h-3 text-red-400" />
@@ -907,11 +1153,12 @@ export default function StudyRoomPage() {
                       ) : (
                         /* Normal card — avatar + info */
                         <>
+                          {/* Hidden audio for remote stream */}
                           {p.user_id === currentRoom.host_id && (
                             <Crown className="w-4 h-4 text-yellow-400 absolute top-2 right-2" />
                           )}
-                          <div className="w-14 h-14 rounded-full mx-auto mb-2 flex items-center justify-center">
-                            <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-neon-cyan to-neon-purple flex items-center justify-center">
+                          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full mx-auto mb-1.5 sm:mb-2 flex items-center justify-center">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden bg-gradient-to-br from-neon-cyan to-neon-purple flex items-center justify-center">
                               {p.display_picture ? (
                                 <img
                                   src={p.display_picture}
@@ -919,22 +1166,22 @@ export default function StudyRoomPage() {
                                   className="w-full h-full object-cover"
                                 />
                               ) : (
-                                <span className="text-lg font-bold text-black">
+                                <span className="text-base sm:text-lg font-bold text-black">
                                   {p.user_name?.charAt(0) || "?"}
                                 </span>
                               )}
                             </div>
                           </div>
-                          <p className="text-sm font-medium text-white truncate">
-                            {p.user_name}
+                          <p className="text-xs sm:text-sm font-medium text-white truncate">
+                            {p.user_name}{isMe ? " (You)" : ""}
                           </p>
-                          <div className="flex items-center justify-center gap-2 mt-2">
-                            <span className="text-xs text-gray-500 flex items-center gap-1">
+                          <div className="flex items-center justify-center gap-2 mt-1.5 sm:mt-2">
+                            <span className="text-[10px] sm:text-xs text-gray-500 flex items-center gap-1">
                               <Zap className="w-3 h-3 text-neon-cyan" />
                               {p.focus_points_earned}
                             </span>
                           </div>
-                          <div className="flex items-center justify-center gap-1.5 mt-1.5">
+                          <div className="flex items-center justify-center gap-1.5 mt-1 sm:mt-1.5">
                             {p.is_muted ? (
                               <MicOff className="w-3 h-3 text-red-400" />
                             ) : (
@@ -955,88 +1202,98 @@ export default function StudyRoomPage() {
             </div>
           </div>
 
-          {/* Chat Sidebar */}
+          {/* Chat Sidebar — full-screen overlay on mobile, side panel on desktop */}
           <AnimatePresence>
             {showChat && (
-              <motion.div
-                initial={{ width: 0, opacity: 0 }}
-                animate={{ width: 380, opacity: 1 }}
-                exit={{ width: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="flex flex-col bg-apex-darker overflow-hidden"
-              >
-                {/* Chat Header */}
-                <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between">
-                  <h3 className="text-sm font-medium text-white flex items-center gap-2">
-                    <MessageCircle className="w-4 h-4 text-neon-cyan" />
-                    Room Chat
-                  </h3>
-                  <button
-                    onClick={() => setShowChat(false)}
-                    className="p-1 rounded hover:bg-white/5 text-gray-400"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Messages */}
-                <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-                  {messages.map((msg) => (
-                    <div key={msg.id}>
-                      {msg.message_type === "system" ? (
-                        <div className="text-center">
-                          <span className="text-xs text-gray-500 bg-white/5 px-3 py-1 rounded-full">
-                            {msg.content}
-                          </span>
-                        </div>
-                      ) : (
-                        <div
-                          className={`flex flex-col ${
-                            msg.sender_id === user?.id ? "items-end" : "items-start"
-                          }`}
-                        >
-                          <span className="text-xs text-gray-500 mb-1">
-                            {msg.sender_name}
-                          </span>
-                          <div
-                            className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm ${
-                              msg.sender_id === user?.id
-                                ? "bg-neon-cyan/20 text-white rounded-br-md"
-                                : "bg-white/5 text-gray-300 rounded-bl-md"
-                            }`}
-                          >
-                            {msg.content}
-                          </div>
-                          <span className="text-[10px] text-gray-600 mt-0.5">
-                            {formatTimeAgo(msg.created_at)}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Message Input */}
-                <div className="p-3 border-t border-white/5">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                      placeholder="Type a message..."
-                      className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-neon-cyan/50"
-                    />
+              <>
+                {/* Backdrop on mobile */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 bg-black/50 z-30 md:hidden"
+                  onClick={() => setShowChat(false)}
+                />
+                <motion.div
+                  initial={{ opacity: 0, x: 50 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 50 }}
+                  transition={{ duration: 0.2 }}
+                  className="fixed inset-0 z-40 md:static md:z-auto md:w-[380px] flex flex-col bg-apex-darker overflow-hidden"
+                >
+                  {/* Chat Header */}
+                  <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between">
+                    <h3 className="text-sm font-medium text-white flex items-center gap-2">
+                      <MessageCircle className="w-4 h-4 text-neon-cyan" />
+                      Room Chat
+                    </h3>
                     <button
-                      onClick={sendMessage}
-                      disabled={!newMessage.trim()}
-                      className="p-2.5 rounded-xl bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      onClick={() => setShowChat(false)}
+                      className="p-1.5 rounded hover:bg-white/5 text-gray-400"
                     >
-                      <Send className="w-4 h-4" />
+                      <X className="w-4 h-4" />
                     </button>
                   </div>
-                </div>
-              </motion.div>
+
+                  {/* Messages */}
+                  <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-3 sm:px-4 py-3 space-y-3">
+                    {messages.map((msg) => (
+                      <div key={msg.id}>
+                        {msg.message_type === "system" ? (
+                          <div className="text-center">
+                            <span className="text-xs text-gray-500 bg-white/5 px-3 py-1 rounded-full">
+                              {msg.content}
+                            </span>
+                          </div>
+                        ) : (
+                          <div
+                            className={`flex flex-col ${
+                              msg.sender_id === user?.id ? "items-end" : "items-start"
+                            }`}
+                          >
+                            <span className="text-xs text-gray-500 mb-1">
+                              {msg.sender_name}
+                            </span>
+                            <div
+                              className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm ${
+                                msg.sender_id === user?.id
+                                  ? "bg-neon-cyan/20 text-white rounded-br-md"
+                                  : "bg-white/5 text-gray-300 rounded-bl-md"
+                              }`}
+                            >
+                              {msg.content}
+                            </div>
+                            <span className="text-[10px] text-gray-600 mt-0.5">
+                              {formatTimeAgo(msg.created_at)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Message Input */}
+                  <div className="p-3 border-t border-white/5">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                        placeholder="Type a message..."
+                        className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-neon-cyan/50"
+                      />
+                      <button
+                        onClick={sendMessage}
+                        disabled={!newMessage.trim()}
+                        className="p-2.5 rounded-xl bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <Send className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              </>
             )}
           </AnimatePresence>
         </div>

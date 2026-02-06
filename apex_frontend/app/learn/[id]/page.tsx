@@ -488,7 +488,7 @@ export default function LearnPage() {
         <div className="max-w-[1800px] mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             {/* Left - Back & Title */}
-            <div className="flex items-center gap-4 min-w-0">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
               <button
                 onClick={() => router.push(`/course/${course.id}`)}
                 className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors flex-shrink-0"
@@ -618,7 +618,7 @@ export default function LearnPage() {
                           <img
                             src={video.thumbnail}
                             alt={video.title}
-                            className="w-24 h-14 object-cover rounded"
+                            className="w-16 sm:w-24 h-10 sm:h-14 object-cover rounded"
                           />
                           {currentVideoId === video.video_id && (
                             <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded">

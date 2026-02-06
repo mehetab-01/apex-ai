@@ -497,7 +497,7 @@ export default function ProfilePage() {
                     {validationResult.validation.is_valid && validationResult.quality && (
                       <div className="space-y-2">
                         <h3 className="text-sm font-medium text-gray-400">Quality Check</h3>
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                           {Object.entries(validationResult.quality).map(([key, value]) => (
                             <div
                               key={key}

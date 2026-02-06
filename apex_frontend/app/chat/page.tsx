@@ -208,57 +208,59 @@ export default function ChatPage() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-6 flex-shrink-0"
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               {showHistory && (
                 <button
                   onClick={() => setShowHistory(false)}
-                  className="p-2 rounded-lg bg-apex-card border border-apex-border hover:border-neon-cyan/50 transition-colors"
+                  className="p-2 rounded-lg bg-apex-card border border-apex-border hover:border-neon-cyan/50 transition-colors flex-shrink-0"
                 >
                   <ChevronLeft className="w-5 h-5 text-gray-400" />
                 </button>
               )}
-              <div className="p-2 rounded-xl bg-neon-cyan">
-                <Bot className="w-6 h-6 text-black" />
+              <div className="p-1.5 sm:p-2 rounded-xl bg-neon-cyan flex-shrink-0">
+                <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-black" />
               </div>
-              <div className="text-left">
-                <h1 className="text-xl font-bold text-white">AI Study Guide</h1>
-                <p className="text-gray-400 text-xs">
+              <div className="text-left min-w-0">
+                <h1 className="text-base sm:text-xl font-bold text-white truncate">AI Study Guide</h1>
+                <p className="text-gray-400 text-[10px] sm:text-xs truncate">
                   {conversationId ? "Conversation saved" : "Start a new conversation"}
                 </p>
               </div>
             </div>
 
             {user && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                 {messages.length > 0 && (
                   <button
                     onClick={handleSaveAndStartNewChat}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-neon-green/10 border border-neon-green/30 hover:border-neon-green/50 hover:bg-neon-green/20 transition-colors text-sm text-neon-green"
+                    className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg bg-neon-green/10 border border-neon-green/30 hover:border-neon-green/50 hover:bg-neon-green/20 transition-colors text-sm text-neon-green"
                     title="Save chat and start new"
                   >
                     <Save className="w-4 h-4" />
-                    Save
+                    <span className="hidden sm:inline">Save</span>
                   </button>
                 )}
                 <button
                   onClick={handleStartNewChat}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-apex-card border border-apex-border hover:border-neon-cyan/50 transition-colors text-sm text-gray-300"
+                  className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg bg-apex-card border border-apex-border hover:border-neon-cyan/50 transition-colors text-sm text-gray-300"
+                  title="New chat"
                 >
                   <Plus className="w-4 h-4" />
-                  New
+                  <span className="hidden sm:inline">New</span>
                 </button>
                 <button
                   onClick={() => setShowHistory(!showHistory)}
                   className={cn(
-                    "flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors text-sm",
+                    "flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg border transition-colors text-sm",
                     showHistory
                       ? "bg-neon-cyan/10 border-neon-cyan/50 text-neon-cyan"
                       : "bg-apex-card border-apex-border text-gray-300 hover:border-neon-cyan/50"
                   )}
+                  title="Chat history"
                 >
                   <History className="w-4 h-4" />
-                  History
+                  <span className="hidden sm:inline">History</span>
                 </button>
               </div>
             )}

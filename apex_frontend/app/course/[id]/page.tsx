@@ -443,7 +443,7 @@ export default function CourseDetailPage() {
               <Sparkles className="w-6 h-6 text-neon-cyan" />
               Similar Courses You Might Like
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {recommendations.map((rec, index) => (
                 <CourseCard
                   key={rec.id}

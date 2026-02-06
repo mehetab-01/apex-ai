@@ -927,7 +927,14 @@ class RoomParticipant(models.Model):
         default=False,
         help_text="Whether user's camera is on"
     )
-    
+
+    peer_id = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        help_text="PeerJS peer ID for WebRTC connections"
+    )
+
     # Focus tracking within room
     focus_time_minutes = models.PositiveIntegerField(
         default=0,

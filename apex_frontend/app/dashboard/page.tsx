@@ -268,7 +268,7 @@ export default function DashboardPage() {
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="absolute z-50 mt-2 w-56 bg-apex-card border border-apex-border rounded-lg shadow-xl overflow-hidden"
+                    className="absolute z-50 mt-2 w-[calc(100vw-2rem)] sm:w-56 bg-apex-card border border-apex-border rounded-lg shadow-xl overflow-hidden"
                   >
                     {categories.map((category) => (
                       <button
@@ -311,7 +311,7 @@ export default function DashboardPage() {
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="absolute z-50 mt-2 w-44 bg-apex-card border border-apex-border rounded-lg shadow-xl overflow-hidden"
+                    className="absolute z-50 mt-2 w-[calc(100vw-2rem)] sm:w-44 bg-apex-card border border-apex-border rounded-lg shadow-xl overflow-hidden"
                   >
                     {difficulties.map((diff) => (
                       <button
@@ -354,7 +354,7 @@ export default function DashboardPage() {
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="absolute z-50 mt-2 w-56 max-h-64 overflow-y-auto bg-apex-card border border-apex-border rounded-lg shadow-xl"
+                    className="absolute z-50 mt-2 w-[calc(100vw-2rem)] sm:w-56 max-h-64 overflow-y-auto bg-apex-card border border-apex-border rounded-lg shadow-xl"
                   >
                     {platforms.map((platform) => (
                       <button
@@ -410,7 +410,7 @@ export default function DashboardPage() {
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="absolute right-0 z-50 mt-2 w-48 bg-apex-card border border-apex-border rounded-lg shadow-xl overflow-hidden"
+                    className="absolute right-0 z-50 mt-2 w-[calc(100vw-2rem)] sm:w-48 bg-apex-card border border-apex-border rounded-lg shadow-xl overflow-hidden"
                   >
                     {sortOptions.map((option) => (
                       <button

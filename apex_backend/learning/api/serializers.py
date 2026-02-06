@@ -397,6 +397,7 @@ class RoomParticipantSerializer(serializers.ModelSerializer):
             'is_active',
             'is_muted',
             'is_camera_on',
+            'peer_id',
             'focus_time_minutes',
             'focus_points_earned',
             'joined_at',

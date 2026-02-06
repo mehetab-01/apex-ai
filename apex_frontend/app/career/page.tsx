@@ -177,7 +177,7 @@ export default function CareerPage() {
               exit={{ opacity: 0, y: -20 }}
               className="max-w-2xl mx-auto"
             >
-              <div className="glass-card p-8">
+              <div className="glass-card p-4 sm:p-6 lg:p-8">
                 <div className="text-center mb-6">
                   <h2 className="text-xl font-semibold text-white mb-2">
                     Upload Your Resume

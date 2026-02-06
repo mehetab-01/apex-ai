@@ -363,10 +363,10 @@ export default function SettingsPage() {
                   <img
                     src={profile.display_picture_url || profile.profile_picture_url}
                     alt={profile.full_name}
-                    className="w-32 h-32 rounded-full object-cover border-4 border-neon-cyan/30"
+                    className="w-24 sm:w-32 h-24 sm:h-32 rounded-full object-cover border-4 border-neon-cyan/30"
                   />
                 ) : (
-                  <div className="w-32 h-32 rounded-full bg-gradient-to-br from-neon-cyan to-neon-purple flex items-center justify-center border-4 border-neon-cyan/30">
+                  <div className="w-24 sm:w-32 h-24 sm:h-32 rounded-full bg-gradient-to-br from-neon-cyan to-neon-purple flex items-center justify-center border-4 border-neon-cyan/30">
                     <span className="text-4xl font-bold text-black">
                       {profile?.full_name?.charAt(0) || user?.full_name?.charAt(0) || "U"}
                     </span>

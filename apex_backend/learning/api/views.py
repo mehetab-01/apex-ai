@@ -2644,9 +2644,17 @@ class RoomToggleStatusView(APIView):
                     'status': 'success',
                     'is_camera_on': participant.is_camera_on,
                 })
+            elif field == 'peer_id':
+                peer_id_value = request.data.get('value', '')
+                participant.peer_id = peer_id_value
+                participant.save(update_fields=['peer_id'])
+                return Response({
+                    'status': 'success',
+                    'peer_id': participant.peer_id,
+                })
             else:
                 return Response(
-                    {'status': 'error', 'message': 'Invalid field. Use mute or camera.'},
+                    {'status': 'error', 'message': 'Invalid field. Use mute, camera, or peer_id.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
