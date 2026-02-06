@@ -158,15 +158,14 @@ export default function StudyRoomPage() {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Media toggle state
-  const [isMuted, setIsMuted] = useState(false);
-  const [isCameraOn, setIsCameraOn] = useState(true);
+  // Media toggle state (default OFF — only ask permission)
+  const [isMuted, setIsMuted] = useState(true);
+  const [isCameraOn, setIsCameraOn] = useState(false);
 
   // Speech detection state
   const [isSpeaking, setIsSpeaking] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const micStreamRef = useRef<MediaStream | null>(null);
   const speechFrameRef = useRef<number | null>(null);
 
   // Camera stream state
@@ -246,43 +245,40 @@ export default function StudyRoomPage() {
     }
   }, [currentRoom?.timer_running, currentRoom?.timer_started_at, currentRoom?.is_break, currentRoom?.timer_paused_remaining]);
 
-  // ===== Speech detection via Web Audio API =====
+  // ===== Speech detection via Web Audio API (uses shared stream) =====
   useEffect(() => {
     let cancelled = false;
 
-    const startSpeechDetection = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
+    const startSpeechDetection = () => {
+      const stream = cameraStreamRef.current;
+      if (!stream) return;
 
-        micStreamRef.current = stream;
-        const audioCtx = new AudioContext();
-        audioContextRef.current = audioCtx;
+      // Enable audio track
+      stream.getAudioTracks().forEach(t => (t.enabled = true));
 
-        const source = audioCtx.createMediaStreamSource(stream);
-        const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 512;
-        analyser.smoothingTimeConstant = 0.4;
-        source.connect(analyser);
-        analyserRef.current = analyser;
+      const audioCtx = new AudioContext();
+      audioContextRef.current = audioCtx;
 
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        const THRESHOLD = 25; // volume threshold to count as "speaking"
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.4;
+      source.connect(analyser);
+      analyserRef.current = analyser;
 
-        const detect = () => {
-          if (cancelled) return;
-          analyser.getByteFrequencyData(dataArray);
-          // Average volume across frequency bins
-          let sum = 0;
-          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-          const avg = sum / dataArray.length;
-          setIsSpeaking(avg > THRESHOLD);
-          speechFrameRef.current = requestAnimationFrame(detect);
-        };
-        detect();
-      } catch (err) {
-        console.warn("Mic access denied or unavailable:", err);
-      }
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const THRESHOLD = 25;
+
+      const detect = () => {
+        if (cancelled) return;
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+        const avg = sum / dataArray.length;
+        setIsSpeaking(avg > THRESHOLD);
+        speechFrameRef.current = requestAnimationFrame(detect);
+      };
+      detect();
     };
 
     const stopSpeechDetection = () => {
@@ -290,11 +286,13 @@ export default function StudyRoomPage() {
       speechFrameRef.current = null;
       if (analyserRef.current) { analyserRef.current.disconnect(); analyserRef.current = null; }
       if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
-      if (micStreamRef.current) { micStreamRef.current.getTracks().forEach(t => t.stop()); micStreamRef.current = null; }
+      // Disable audio track (don't stop it — shared stream)
+      const stream = cameraStreamRef.current;
+      if (stream) stream.getAudioTracks().forEach(t => (t.enabled = false));
       setIsSpeaking(false);
     };
 
-    if (view === "room" && !isMuted) {
+    if (view === "room" && !isMuted && cameraStreamRef.current) {
       startSpeechDetection();
     } else {
       stopSpeechDetection();
@@ -306,45 +304,48 @@ export default function StudyRoomPage() {
     };
   }, [view, isMuted]);
 
-  // ===== Camera stream management =====
+  // ===== Request media permissions once on room join =====
   useEffect(() => {
     let cancelled = false;
 
-    const startCamera = async () => {
+    const requestPermissions = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        // Ask for both permissions once, tracks start disabled
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
+        // Store video stream, disable tracks by default
+        stream.getVideoTracks().forEach(t => (t.enabled = false));
+        stream.getAudioTracks().forEach(t => (t.enabled = false));
         cameraStreamRef.current = stream;
-        // Attach to video element if it exists
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-        }
       } catch (err) {
-        console.warn("Camera access denied or unavailable:", err);
+        console.warn("Media permission denied or unavailable:", err);
       }
     };
 
-    const stopCamera = () => {
-      if (cameraStreamRef.current) {
-        cameraStreamRef.current.getTracks().forEach(t => t.stop());
-        cameraStreamRef.current = null;
-      }
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = null;
-      }
-    };
-
-    if (view === "room" && isCameraOn) {
-      startCamera();
-    } else {
-      stopCamera();
+    if (view === "room") {
+      requestPermissions();
     }
 
     return () => {
       cancelled = true;
-      stopCamera();
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach(t => t.stop());
+        cameraStreamRef.current = null;
+      }
     };
-  }, [view, isCameraOn]);
+  }, [view]);
+
+  // ===== Enable / disable video track when camera toggled =====
+  useEffect(() => {
+    const stream = cameraStreamRef.current;
+    if (stream) {
+      stream.getVideoTracks().forEach(t => (t.enabled = isCameraOn));
+    }
+    // Clear video element when camera is off
+    if (!isCameraOn && localVideoRef.current) {
+      localVideoRef.current.srcObject = null;
+    }
+  }, [isCameraOn]);
 
   // ===== Auto-scroll chat =====
   useEffect(() => {
@@ -833,7 +834,7 @@ export default function StudyRoomPage() {
                             <video
                               ref={(el) => {
                                 localVideoRef.current = el;
-                                if (el && cameraStreamRef.current) {
+                                if (el && cameraStreamRef.current && el.srcObject !== cameraStreamRef.current) {
                                   el.srcObject = cameraStreamRef.current;
                                 }
                               }}
