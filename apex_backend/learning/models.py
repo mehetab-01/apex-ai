@@ -919,7 +919,7 @@ class RoomParticipant(models.Model):
     )
     
     is_muted = models.BooleanField(
-        default=False,
+        default=True,
         help_text="Whether user's audio is muted"
     )
     
