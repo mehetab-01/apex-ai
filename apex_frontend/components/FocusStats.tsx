@@ -1,13 +1,15 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Eye, Zap, Target, TrendingUp } from "lucide-react";
+import { Eye, EyeOff, Zap, Target, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface FocusStatsDisplayProps {
   points: number;
   elapsedSeconds: number;
   attentionScore: number;
+  blinkCount?: number;
+  eyeTrackingEnabled?: boolean;
   isActive?: boolean;
 }
 
@@ -15,6 +17,8 @@ export default function FocusStatsDisplay({
   points,
   elapsedSeconds,
   attentionScore,
+  blinkCount = 0,
+  eyeTrackingEnabled = false,
   isActive = true,
 }: FocusStatsDisplayProps) {
   const minutes = Math.floor(elapsedSeconds / 60);
@@ -49,39 +53,70 @@ export default function FocusStatsDisplay({
   ];
 
   return (
-    <div className="grid grid-cols-3 gap-4">
-      {stats.map((stat, index) => (
-        <motion.div
-          key={stat.label}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: index * 0.1 }}
-          className={cn(
-            "glass-card p-4 text-center border",
-            stat.borderColor
-          )}
-        >
-          <div className={cn(
-            "inline-flex p-2 rounded-lg mb-2",
-            stat.bgColor
-          )}>
-            <stat.icon className={cn("w-5 h-5", stat.color)} />
-          </div>
-          
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {stats.map((stat, index) => (
           <motion.div
-            key={stat.value}
-            initial={{ scale: 1.2 }}
-            animate={{ scale: 1 }}
-            className={cn("text-2xl font-bold", stat.color)}
+            key={stat.label}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.1 }}
+            className={cn(
+              "glass-card p-3 text-center border overflow-hidden",
+              stat.borderColor
+            )}
           >
-            {stat.value}
+            <div className={cn(
+              "inline-flex p-2 rounded-lg mb-2",
+              stat.bgColor
+            )}>
+              <stat.icon className={cn("w-4 h-4", stat.color)} />
+            </div>
+
+            <motion.div
+              key={stat.value}
+              initial={{ scale: 1.2 }}
+              animate={{ scale: 1 }}
+              className={cn("text-lg sm:text-xl font-bold truncate", stat.color)}
+            >
+              {stat.value}
+            </motion.div>
+
+            <div className="text-xs text-gray-400 mt-1 truncate">
+              {stat.label}
+            </div>
           </motion.div>
-          
-          <div className="text-xs text-gray-400 mt-1">
-            {stat.label}
+        ))}
+      </div>
+
+      {/* Eye Tracking Status */}
+      {eyeTrackingEnabled && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-card p-3 border border-neon-purple/30"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-neon-purple/10">
+                <Activity className="w-4 h-4 text-neon-purple" />
+              </div>
+              <span className="text-sm text-gray-300">Eye Tracking</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <Eye className="w-3.5 h-3.5 text-neon-green" />
+                <span className="text-xs text-gray-400">Active</span>
+              </div>
+              <div className="h-4 w-px bg-apex-border" />
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-medium text-neon-cyan">{blinkCount}</span>
+                <span className="text-xs text-gray-400">Blinks</span>
+              </div>
+            </div>
           </div>
         </motion.div>
-      ))}
+      )}
     </div>
   );
 }
@@ -140,6 +175,42 @@ export function AttentionIndicator({ score }: { score: number }) {
       <span className={cn("font-bold", status.color)}>
         {score.toFixed(0)}%
       </span>
+    </motion.div>
+  );
+}
+
+export function EyeStatusIndicator({ eyesOpen, eyeTrackingEnabled }: { eyesOpen: boolean; eyeTrackingEnabled: boolean }) {
+  if (!eyeTrackingEnabled) {
+    return (
+      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-500/20 border border-gray-500/30">
+        <EyeOff className="w-4 h-4 text-gray-400" />
+        <span className="text-xs text-gray-400">Eye tracking off</span>
+      </div>
+    );
+  }
+
+  return (
+    <motion.div
+      animate={eyesOpen ? {} : { opacity: [1, 0.5, 1] }}
+      transition={{ duration: 0.5, repeat: eyesOpen ? 0 : Infinity }}
+      className={cn(
+        "inline-flex items-center gap-2 px-3 py-1.5 rounded-full border",
+        eyesOpen
+          ? "bg-neon-green/20 border-neon-green/30"
+          : "bg-yellow-500/20 border-yellow-500/30"
+      )}
+    >
+      {eyesOpen ? (
+        <>
+          <Eye className="w-4 h-4 text-neon-green" />
+          <span className="text-xs text-neon-green font-medium">Eyes Open</span>
+        </>
+      ) : (
+        <>
+          <EyeOff className="w-4 h-4 text-yellow-400" />
+          <span className="text-xs text-yellow-400 font-medium">Eyes Closed</span>
+        </>
+      )}
     </motion.div>
   );
 }

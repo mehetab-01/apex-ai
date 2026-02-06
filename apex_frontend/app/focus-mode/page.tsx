@@ -17,12 +17,14 @@ import {
   Info
 } from "lucide-react";
 import FocusStatsDisplay, { FocusPointsCounter, AttentionIndicator } from "@/components/FocusStats";
-import { getFocusStats, VIDEO_FEED_URL, type FocusStats } from "@/lib/api";
+import { getFocusStats, saveFocusSession, endFocusSession, VIDEO_FEED_URL, type FocusStats } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 type SessionState = "idle" | "active" | "paused" | "ended";
 
 export default function FocusModePage() {
+  const { user, isAuthenticated, updateUser } = useAuth();
   const [sessionState, setSessionState] = useState<SessionState>("idle");
   const [stats, setStats] = useState<FocusStats>({
     frame_count: 0,
@@ -36,7 +38,8 @@ export default function FocusModePage() {
   const [videoError, setVideoError] = useState(false);
   const [localTimer, setLocalTimer] = useState(0);
   const [localPoints, setLocalPoints] = useState(0);
-  
+  const [isSaving, setIsSaving] = useState(false);
+
   const videoRef = useRef<HTMLImageElement>(null);
   const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -84,11 +87,42 @@ export default function FocusModePage() {
     setSessionState("active");
   };
 
-  const endSession = () => {
+  const endSession = async () => {
     setSessionState("ended");
     setShowVideo(false);
     if (statsIntervalRef.current) clearInterval(statsIntervalRef.current);
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+
+    // Stop the camera/video feed on the backend
+    try {
+      await endFocusSession();
+    } catch (error) {
+      console.error("Failed to end focus session on backend:", error);
+    }
+
+    // Save session to user profile if authenticated
+    if (isAuthenticated && localPoints > 0) {
+      setIsSaving(true);
+      try {
+        const result = await saveFocusSession({
+          points: localPoints,
+          duration_seconds: localTimer,
+          attention_score: stats.attention_score || 75,
+        });
+
+        // Update local user state with new totals
+        if (result.status === "success" && result.user_stats) {
+          updateUser({
+            focus_points: result.user_stats.total_focus_points,
+            total_focus_time_minutes: result.user_stats.total_focus_time_minutes,
+          } as any);
+        }
+      } catch (error) {
+        console.error("Failed to save focus session:", error);
+      } finally {
+        setIsSaving(false);
+      }
+    }
   };
 
   const resetSession = () => {
@@ -117,7 +151,7 @@ export default function FocusModePage() {
   };
 
   return (
-    <div className="min-h-screen pt-20 pb-12">
+    <div className="py-8 pb-12">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <motion.div
@@ -149,9 +183,9 @@ export default function FocusModePage() {
         </motion.div>
 
         {/* Main Content */}
-        <div className="grid lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
           {/* Video Feed Section */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 order-1">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -186,7 +220,23 @@ export default function FocusModePage() {
                     <>
                       <CheckCircle className="w-16 h-16 text-neon-green mb-4" />
                       <h3 className="text-xl font-semibold text-white mb-2">Session Complete!</h3>
-                      <p className="text-gray-400">Great job staying focused!</p>
+                      <p className="text-gray-400">Great job staying focused for {formatTime(localTimer)}!</p>
+                      {isAuthenticated && (
+                        <div className="mt-4 text-center space-y-1">
+                          {isSaving ? (
+                            <p className="text-neon-cyan text-sm">Saving your progress...</p>
+                          ) : (
+                            <>
+                              <p className="text-neon-green text-sm">
+                                +{localPoints} points saved to your profile!
+                              </p>
+                              <p className="text-neon-cyan text-sm">
+                                +{Math.floor(localTimer / 60)} min focus time recorded
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </>
                   ) : (
                     <>
@@ -301,7 +351,7 @@ export default function FocusModePage() {
           </div>
 
           {/* Stats Sidebar */}
-          <div className="space-y-6">
+          <div className="space-y-6 order-2">
             {/* Session Stats */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
@@ -318,6 +368,8 @@ export default function FocusModePage() {
                 points={localPoints}
                 elapsedSeconds={localTimer}
                 attentionScore={stats.attention_score || (sessionState === "active" ? 75 : 0)}
+                blinkCount={stats.blink_count || 0}
+                eyeTrackingEnabled={stats.eye_tracking_enabled || false}
                 isActive={sessionState === "active"}
               />
             </motion.div>
