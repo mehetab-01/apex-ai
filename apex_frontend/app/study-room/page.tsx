@@ -161,6 +161,13 @@ export default function StudyRoomPage() {
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(true);
 
+  // Speech detection state
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const speechFrameRef = useRef<number | null>(null);
+
   // Timer state
   const [timerSeconds, setTimerSeconds] = useState(0);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -228,6 +235,66 @@ export default function StudyRoomPage() {
       setTimerSeconds(totalSeconds);
     }
   }, [currentRoom?.timer_running, currentRoom?.timer_started_at, currentRoom?.is_break]);
+
+  // ===== Speech detection via Web Audio API =====
+  useEffect(() => {
+    let cancelled = false;
+
+    const startSpeechDetection = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
+
+        micStreamRef.current = stream;
+        const audioCtx = new AudioContext();
+        audioContextRef.current = audioCtx;
+
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 512;
+        analyser.smoothingTimeConstant = 0.4;
+        source.connect(analyser);
+        analyserRef.current = analyser;
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        const THRESHOLD = 25; // volume threshold to count as "speaking"
+
+        const detect = () => {
+          if (cancelled) return;
+          analyser.getByteFrequencyData(dataArray);
+          // Average volume across frequency bins
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+          const avg = sum / dataArray.length;
+          setIsSpeaking(avg > THRESHOLD);
+          speechFrameRef.current = requestAnimationFrame(detect);
+        };
+        detect();
+      } catch (err) {
+        console.warn("Mic access denied or unavailable:", err);
+      }
+    };
+
+    const stopSpeechDetection = () => {
+      if (speechFrameRef.current) cancelAnimationFrame(speechFrameRef.current);
+      speechFrameRef.current = null;
+      if (analyserRef.current) { analyserRef.current.disconnect(); analyserRef.current = null; }
+      if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
+      if (micStreamRef.current) { micStreamRef.current.getTracks().forEach(t => t.stop()); micStreamRef.current = null; }
+      setIsSpeaking(false);
+    };
+
+    if (view === "room" && !isMuted) {
+      startSpeechDetection();
+    } else {
+      stopSpeechDetection();
+    }
+
+    return () => {
+      cancelled = true;
+      stopSpeechDetection();
+    };
+  }, [view, isMuted]);
 
   // ===== Auto-scroll chat =====
   useEffect(() => {
@@ -704,7 +771,9 @@ export default function StudyRoomPage() {
                       <Crown className="w-4 h-4 text-yellow-400 absolute top-2 right-2" />
                     )}
                     <div className={`w-14 h-14 rounded-full mx-auto mb-2 flex items-center justify-center ${
-                      !p.is_muted ? "speaking-ring" : ""
+                      p.user_id === user?.id
+                        ? (isSpeaking && !isMuted ? "speaking-ring" : "speaking-ring-off")
+                        : (!p.is_muted ? "speaking-ring-off" : "speaking-ring-off")
                     }`}>
                       <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-neon-cyan to-neon-purple flex items-center justify-center">
                         {p.display_picture ? (

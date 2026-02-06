@@ -180,22 +180,17 @@
   }
 }
 
-/* Speaking ring animation (Google Meet style) */
-@keyframes speaking-pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.6);
-  }
-  50% {
-    box-shadow: 0 0 0 5px rgba(0, 255, 136, 0.15);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(0, 255, 136, 0);
-  }
+/* Speaking ring (Google Meet style - shows only when actively speaking) */
+.speaking-ring {
+  border: 2.5px solid #00ff88;
+  box-shadow: 0 0 8px rgba(0, 255, 136, 0.5), 0 0 16px rgba(0, 255, 136, 0.2);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.speaking-ring {
-  animation: speaking-pulse 1.4s ease-in-out infinite;
-  border: 2px solid #00ff88;
+.speaking-ring-off {
+  border: 2.5px solid transparent;
+  box-shadow: none;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .speaking-ring-lg {
