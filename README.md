@@ -1,140 +1,359 @@
-# 🎓 APEX AI - Intelligent E-Learning Platform
+# APEX - AI-Powered E-Learning Content Recommendation System
 
 <div align="center">
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python)
-![Django](https://img.shields.io/badge/Django-4.2-green?style=for-the-badge&logo=django)
-![Next.js](https://img.shields.io/badge/Next.js-14-black?style=for-the-badge&logo=next.js)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?style=for-the-badge&logo=typescript)
-![TailwindCSS](https://img.shields.io/badge/Tailwind-3.4-38B2AC?style=for-the-badge&logo=tailwind-css)
+![APEX Logo](docs/screenshots/logo.png)
 
-**A full-stack AI-powered e-learning platform addressing SDG 4 (Quality Education) with intelligent course recommendations, real-time attention tracking, collaborative study rooms, and 24/7 AI tutoring.**
+### Addressing UN SDG 4: Quality Education
 
-[Features](#-features) • [Tech Stack](#-tech-stack) • [Installation](#-installation) • [API Docs](#-api-endpoints)
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Django](https://img.shields.io/badge/Django-4.2-092E20?style=for-the-badge&logo=django&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-14-000000?style=for-the-badge&logo=next.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![TailwindCSS](https://img.shields.io/badge/Tailwind-3.4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
+![OpenCV](https://img.shields.io/badge/OpenCV-4.x-5C3EE8?style=for-the-badge&logo=opencv&logoColor=white)
+
+**A comprehensive AI-powered e-learning platform that combines intelligent course recommendations, real-time attention tracking, collaborative study rooms, and 24/7 AI tutoring to transform online education.**
+
+[Features](#-key-features) • [Screenshots](#-screenshots) • [Installation](#-installation) • [Tech Stack](#-technology-stack) • [API Documentation](#-api-documentation)
 
 </div>
 
 ---
 
-## 🎯 Project Overview
+## Table of Contents
 
-**APEX** solves the "overwhelming choice + zero accountability" problem in online education through:
-
-| Pillar | Feature | Impact |
-|--------|---------|--------|
-| **DISCOVER** | AI Course Recommendations | Find the right course in seconds |
-| **LEARN** | 24/7 AI Study Guide | Get help anytime, anywhere |
-| **FOCUS** | Attention Tracking | Stay accountable for real learning |
-| **COLLABORATE** | Study Rooms | Learn together with peers |
-| **GROW** | Career Guidance | Know where to go next |
-
----
-
-## ✨ Features
-
-### 🤖 AI-Powered Learning
-- **Smart Course Recommendations** - TF-IDF + Cosine Similarity engine suggests personalized courses from 14+ platforms
-- **AI Chat Tutor** - Google Gemini-powered conversational study guide available 24/7
-- **Resume Analysis** - Upload resume for AI-generated career roadmaps and skill gap analysis
-
-### 📺 YouTube Embedded Learning
-- **Watch Within APEX** - Embedded YouTube player for seamless learning experience
-- **Chapter Navigation** - Auto-parsed chapters from video descriptions
-- **Playlist Support** - Navigate through course playlists without leaving the platform
-- **Progress Tracking** - Track time spent and enrollment progress
-
-### 👥 Collaborative Study Rooms
-- **Real-time Collaboration** - Join study rooms with peers via room codes
-- **Pomodoro Timer** - Built-in focus timer with host controls
-- **Live Video/Audio** - See and hear participants with webcam/mic support
-- **Speaking Indicators** - Visual feedback when participants are speaking
-- **Room Chat** - Text chat within study rooms
-
-### 🎯 Focus Mode
-- **Real-time Face Detection** - Tracks attention using webcam + OpenCV Haar Cascades
-- **Session Analytics** - Monitors study time and focus percentage
-- **Gamification** - Earn focus points for sustained attention
-- **Distraction Alerts** - Visual feedback when looking away
-
-### 👤 User Authentication
-- **Multi-method Login** - Email, phone number, or Google OAuth
-- **OTP Verification** - SMS (Twilio) and Email (Brevo) OTP support
-- **JWT Authentication** - Secure token-based auth with refresh tokens
-- **Face Validation** - OpenCV-powered face detection for profile verification
-
-### 📚 Course Aggregation
-Courses from **14+ platforms**:
-- YouTube, Udemy, Coursera, NPTEL
-- freeCodeCamp, edX, MIT OpenCourseWare
-- Cisco Networking Academy, Infosys Springboard
-- Cyfrin Updraft, HackerRank, LeetCode, CodeChef
-
-### 🎨 Modern UI/UX
-- **Cyberpunk Design** - Dark mode with neon cyan/green/purple accents
-- **Responsive Layout** - Mobile-first design with Tailwind CSS
-- **Smooth Animations** - Framer Motion transitions
-- **Complete Website** - About, Blog, Careers, Contact, and Legal pages
+- [Problem Statement](#-problem-statement)
+- [Solution Overview](#-solution-overview)
+- [Key Features](#-key-features)
+- [Screenshots](#-screenshots)
+- [Technology Stack](#-technology-stack)
+- [System Architecture](#-system-architecture)
+- [Installation](#-installation)
+- [API Documentation](#-api-documentation)
+- [Project Structure](#-project-structure)
+- [SDG 4 Alignment](#-sdg-4-alignment)
+- [Future Roadmap](#-future-roadmap)
+- [Contributors](#-contributors)
 
 ---
 
-## 🏗️ Architecture
+## 🎯 Problem Statement
+
+Online education has exploded, but **course completion rates remain dismally low at 3-15%**. The key challenges include:
+
+| Problem | Impact |
+|---------|--------|
+| **Choice Overload** | 10,000+ courses available; students spend hours searching instead of learning |
+| **No Personalization** | One-size-fits-all recommendations ignore skill gaps and career goals |
+| **Zero Accountability** | No tracking of actual attention; students "watch" videos while distracted |
+| **Expensive Guidance** | Personal tutors cost $50-200/hour; career counselors charge $100+ per session |
+| **Scattered Resources** | Quality content spread across YouTube, Udemy, Coursera, NPTEL, etc. |
+| **Isolation in Learning** | No peer collaboration or study groups for motivation |
+
+---
+
+## 💡 Solution Overview
+
+**APEX** addresses the "overwhelming choice + zero accountability" problem through five core pillars:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Next.js 14 Frontend                       │
-│            (React, TypeScript, Tailwind CSS)                 │
-│                   http://localhost:3000                      │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              │ REST API (JSON)
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     Django REST Backend                      │
-│        (DRF, OpenCV, Scikit-Learn, Google Gemini)           │
-│                   http://localhost:8000                      │
-└─────────────────────────────────────────────────────────────┘
-                              │
-          ┌───────────────────┼───────────────────┐
-          ▼                   ▼                   ▼
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│   SQLite DB  │    │  Gemini API  │    │ YouTube API  │
-│   (Users,    │    │  (AI Chat)   │    │  (Chapters)  │
-│   Courses)   │    │              │    │              │
-└──────────────┘    └──────────────┘    └──────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              APEX PLATFORM                                   │
+├───────────────┬───────────────┬───────────────┬───────────────┬─────────────┤
+│   DISCOVER    │     LEARN     │    FOCUS      │  COLLABORATE  │    GROW     │
+│               │               │               │               │             │
+│  AI Course    │  24/7 AI      │  Attention    │  Study        │  Career     │
+│  Recommend-   │  Study        │  Tracking     │  Rooms with   │  Guidance   │
+│  ations       │  Guide        │  (OpenCV)     │  Pomodoro     │  & Resume   │
+│               │               │               │               │  Analysis   │
+│  "What to     │  "Help when   │  "Stay        │  "Learn       │  "Where     │
+│   learn"      │   stuck"      │   accountable"│   together"   │   to go"    │
+└───────────────┴───────────────┴───────────────┴───────────────┴─────────────┘
 ```
 
 ---
 
-## 🛠️ Tech Stack
+## ✨ Key Features
+
+### 1. AI-Powered Course Recommendations
+
+Intelligent course discovery using **TF-IDF + Cosine Similarity** algorithm that analyzes:
+- Course title, description, and content
+- Category and difficulty level
+- User preferences and learning history
+- Career goals and skill gaps
+
+**Two Recommendation Modes:**
+- **Course-based:** "Similar to this course you liked"
+- **Query-based:** "Based on your interests/skills"
+
+<details>
+<summary><b>📸 Screenshots</b></summary>
+
+| Dashboard with Recommendations | Course Discovery |
+|:------------------------------:|:----------------:|
+| ![Dashboard](docs/screenshots/features/dashboard.png) | ![Course Discovery](docs/screenshots/features/course-discovery.png) |
+
+</details>
+
+---
+
+### 2. YouTube Embedded Learning with Chapters
+
+Watch courses directly within APEX without leaving the platform:
+- **Embedded YouTube Player** with full controls
+- **Auto-parsed Chapters** from video descriptions
+- **Smooth Chapter Navigation** using YouTube IFrame API
+- **Playlist Support** with video switching
+- **Progress Tracking** for enrolled courses
+
+<details>
+<summary><b>📸 Screenshots</b></summary>
+
+| Learning Page | Chapter Navigation |
+|:-------------:|:------------------:|
+| ![Learning Page](docs/screenshots/features/learn-page.png) | ![Chapters](docs/screenshots/features/chapters.png) |
+
+</details>
+
+---
+
+### 3. Focus Mode - Real-Time Attention Tracking
+
+Stay accountable with **webcam-based face detection** using OpenCV:
+- **Real-time Face Detection** using Haar Cascades
+- **Attention Score Calculation** (% of time face detected)
+- **Focus Points & Gamification** for sustained attention
+- **Session Statistics** saved to user profile
+- **Visual Feedback** when distracted
+
+**Metrics Tracked:**
+| Metric | Description |
+|--------|-------------|
+| `attention_score` | Percentage of time face was detected |
+| `focus_points` | Gamified points earned |
+| `elapsed_time` | Total session duration |
+| `face_detected_count` | Frames where face was present |
+
+<details>
+<summary><b>📸 Screenshots</b></summary>
+
+| Focus Mode Active | Focus Statistics |
+|:-----------------:|:----------------:|
+| ![Focus Mode](docs/screenshots/features/focus-mode.png) | ![Focus Stats](docs/screenshots/features/focus-stats.png) |
+
+</details>
+
+---
+
+### 4. Collaborative Study Rooms
+
+Learn together with peers in real-time:
+- **Create/Join Rooms** via room codes
+- **Pomodoro Timer** with host controls (25/5 min cycles)
+- **Live Video/Audio** with webcam and microphone support
+- **Speaking Indicators** using Web Audio API
+- **Room Chat** for text communication
+- **Participant Management** with mute/camera toggles
+
+<details>
+<summary><b>📸 Screenshots</b></summary>
+
+| Study Room Lobby | Active Study Room |
+|:----------------:|:-----------------:|
+| ![Room Lobby](docs/screenshots/features/study-room-lobby.png) | ![Active Room](docs/screenshots/features/study-room-active.png) |
+
+| Pomodoro Timer | Participant Grid |
+|:--------------:|:----------------:|
+| ![Timer](docs/screenshots/features/pomodoro-timer.png) | ![Participants](docs/screenshots/features/participants.png) |
+
+</details>
+
+---
+
+### 5. AI Study Guide (24/7 Chat Tutor)
+
+Get instant help anytime with **Google Gemini-powered** AI tutor:
+- **Multi-turn Conversations** with context retention
+- **Markdown Rendering** with code syntax highlighting
+- **Suggested Follow-up Questions**
+- **Conversation History** saved per user
+- **Multiple AI Provider Support** (Gemini, Groq, Cohere fallbacks)
+
+<details>
+<summary><b>📸 Screenshots</b></summary>
+
+| AI Chat Interface | Code Assistance |
+|:-----------------:|:---------------:|
+| ![AI Chat](docs/screenshots/features/ai-chat.png) | ![Code Help](docs/screenshots/features/code-help.png) |
+
+</details>
+
+---
+
+### 6. Career Guidance & Resume Analysis
+
+Get personalized career roadmaps:
+- **Resume Upload** (PDF parsing)
+- **Skill Extraction** using AI
+- **Gap Analysis** for target roles
+- **Course Recommendations** to fill gaps
+- **Career Path Suggestions**
+
+<details>
+<summary><b>📸 Screenshots</b></summary>
+
+| Career Page | Resume Analysis |
+|:-----------:|:---------------:|
+| ![Career](docs/screenshots/features/career-page.png) | ![Resume](docs/screenshots/features/resume-analysis.png) |
+
+</details>
+
+---
+
+### 7. Multi-Platform Course Aggregation
+
+One-stop discovery for courses across **14+ platforms**:
+
+| Free Platforms | Certification | Practice |
+|----------------|---------------|----------|
+| YouTube | Coursera | HackerRank |
+| freeCodeCamp | Udemy | LeetCode |
+| MIT OpenCourseWare | Cisco NetAcad | CodeChef |
+| NPTEL | edX | |
+| Infosys Springboard | Cyfrin Updraft | |
+
+---
+
+### 8. Secure Authentication
+
+Multiple authentication methods with security features:
+- **Email/Phone Login** with OTP verification
+- **Google OAuth 2.0** integration
+- **JWT Authentication** with refresh tokens
+- **Face Validation** for profile verification
+- **SMS OTP** via Twilio
+- **Email OTP** via Brevo/Sendinblue
+
+<details>
+<summary><b>📸 Screenshots</b></summary>
+
+| Login Page | Registration | Face Validation |
+|:----------:|:------------:|:---------------:|
+| ![Login](docs/screenshots/pages/login.png) | ![Register](docs/screenshots/pages/register.png) | ![Face](docs/screenshots/features/face-validation.png) |
+
+</details>
+
+---
+
+## 📸 Screenshots
+
+### Pages Overview
+
+| Page | Screenshot |
+|------|------------|
+| **Landing Page** | ![Landing](docs/screenshots/pages/landing.png) |
+| **Dashboard** | ![Dashboard](docs/screenshots/pages/dashboard.png) |
+| **Course Detail** | ![Course](docs/screenshots/pages/course-detail.png) |
+| **Learning Page** | ![Learn](docs/screenshots/pages/learn.png) |
+| **My Courses** | ![My Courses](docs/screenshots/pages/my-courses.png) |
+| **Focus Mode** | ![Focus](docs/screenshots/pages/focus-mode.png) |
+| **Study Room** | ![Study Room](docs/screenshots/pages/study-room.png) |
+| **AI Chat** | ![Chat](docs/screenshots/pages/chat.png) |
+| **Career** | ![Career](docs/screenshots/pages/career.png) |
+| **Settings** | ![Settings](docs/screenshots/pages/settings.png) |
+| **About** | ![About](docs/screenshots/pages/about.png) |
+
+---
+
+## 🛠 Technology Stack
 
 ### Backend
-| Technology | Purpose |
-|------------|---------|
-| Django 4.2 | Web framework |
-| Django REST Framework | API endpoints |
-| SimpleJWT | JWT authentication |
-| OpenCV | Face detection |
-| Scikit-Learn | ML recommendations |
-| Google Gemini | AI chat responses |
-| Twilio | SMS OTP |
-| Brevo/Sendinblue | Email OTP |
+
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| Python | 3.10+ | Programming language |
+| Django | 4.2 | Web framework |
+| Django REST Framework | 3.14 | REST API |
+| SimpleJWT | 5.3 | JWT authentication |
+| OpenCV | 4.x | Face detection |
+| Scikit-Learn | 1.3 | ML recommendations (TF-IDF) |
+| Google Gemini | latest | AI chat responses |
+| Twilio | latest | SMS OTP |
+| Brevo/Sendinblue | latest | Email OTP |
+| SQLite | 3 | Database (PostgreSQL ready) |
 
 ### Frontend
-| Technology | Purpose |
-|------------|---------|
-| Next.js 14 | React framework (App Router) |
-| TypeScript | Type safety |
-| Tailwind CSS | Styling |
-| Framer Motion | Animations |
-| Axios | HTTP client |
-| Lucide React | Icons |
-| Web Audio API | Speaking detection |
+
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| Next.js | 14 | React framework (App Router) |
+| React | 18 | UI library |
+| TypeScript | 5.0 | Type safety |
+| Tailwind CSS | 3.4 | Styling |
+| Framer Motion | 10 | Animations |
+| Axios | 1.6 | HTTP client |
+| Lucide React | latest | Icons |
+| Web Audio API | native | Speaking detection |
+| React Markdown | 9 | Chat rendering |
+
+---
+
+## 🏗 System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           CLIENT (Browser)                                   │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                      Next.js 14 Frontend                             │    │
+│  │         React 18 + TypeScript + Tailwind CSS + Framer Motion         │    │
+│  │                      http://localhost:3000                           │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      │ REST API (JSON)
+                                      │ JWT Authentication
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           SERVER (Django)                                    │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                   Django REST Framework Backend                      │    │
+│  │                      http://localhost:8000                           │    │
+│  │                                                                      │    │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │    │
+│  │  │   accounts   │  │   learning   │  │  apex_backend│               │    │
+│  │  │              │  │              │  │   (settings) │               │    │
+│  │  │ - Auth       │  │ - Courses    │  │              │               │    │
+│  │  │ - Users      │  │ - Recommend  │  │ - CORS       │               │    │
+│  │  │ - OTP        │  │ - AI Chat    │  │ - JWT        │               │    │
+│  │  │ - Face Valid │  │ - Focus Mode │  │ - Database   │               │    │
+│  │  │              │  │ - Study Rooms│  │              │               │    │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘               │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+          ┌───────────────────────────┼───────────────────────────┐
+          │                           │                           │
+          ▼                           ▼                           ▼
+┌──────────────────┐      ┌──────────────────┐      ┌──────────────────┐
+│    SQLite DB     │      │   External APIs  │      │   AI Services    │
+│                  │      │                  │      │                  │
+│ - Users          │      │ - YouTube Data   │      │ - Google Gemini  │
+│ - Courses        │      │ - Twilio SMS     │      │ - Groq (fallback)│
+│ - Enrollments    │      │ - Brevo Email    │      │ - Cohere(fallback│
+│ - Study Rooms    │      │                  │      │                  │
+│ - Chat History   │      │                  │      │                  │
+│ - Focus Sessions │      │                  │      │                  │
+└──────────────────┘      └──────────────────┘      └──────────────────┘
+```
 
 ---
 
 ## 📦 Installation
 
 ### Prerequisites
+
 - Python 3.10+
 - Node.js 18+
 - Git
@@ -153,25 +372,35 @@ start.bat
 
 ### Manual Setup
 
-#### Backend
+#### 1. Backend Setup
+
 ```bash
 cd apex_backend
 
 # Create virtual environment
 python -m venv venv
-venv\Scripts\activate  # Linux/Mac: source venv/bin/activate
+
+# Activate virtual environment
+# Windows:
+venv\Scripts\activate
+# Linux/Mac:
+source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Setup database
+# Run database migrations
 python manage.py migrate
 
-# Start server
+# Create superuser (optional)
+python manage.py createsuperuser
+
+# Start Django server
 python manage.py runserver
 ```
 
-#### Frontend
+#### 2. Frontend Setup
+
 ```bash
 cd apex_frontend
 
@@ -182,60 +411,99 @@ npm install
 npm run dev
 ```
 
-### Environment Variables
+#### 3. Environment Variables
 
-**Backend** (`apex_backend/.env`):
+Create `apex_backend/.env`:
+
 ```env
-DJANGO_SECRET_KEY=your-secret-key
+# Django
+DJANGO_SECRET_KEY=your-secret-key-here
+
+# AI APIs
 GEMINI_API_KEY=your-gemini-api-key
-YOUTUBE_API_KEY=your-youtube-api-key
 GROQ_API_KEY=your-groq-api-key (optional)
 COHERE_API_KEY=your-cohere-api-key (optional)
+
+# External APIs
+YOUTUBE_API_KEY=your-youtube-api-key
+
+# OTP Services (optional)
+TWILIO_ACCOUNT_SID=your-twilio-sid
+TWILIO_AUTH_TOKEN=your-twilio-token
+TWILIO_PHONE_NUMBER=your-twilio-number
+BREVO_API_KEY=your-brevo-api-key
+
+# Debug
 DEBUG=True
 ```
 
+### Access the Application
+
+- **Frontend:** http://localhost:3000
+- **Backend API:** http://localhost:8000/api/
+- **Admin Panel:** http://localhost:8000/admin/
+
 ---
 
-## 🔌 API Endpoints
+## 📡 API Documentation
 
-### Authentication
+### Authentication Endpoints
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/auth/register/` | User registration |
-| POST | `/api/auth/login/` | Email/phone login |
-| POST | `/api/auth/send-otp/` | Send OTP (email/SMS) |
-| POST | `/api/auth/verify-otp/` | Verify OTP |
-| POST | `/api/auth/google/` | Google OAuth |
-| POST | `/api/auth/validate-face/` | Face validation |
+| `POST` | `/api/auth/register/` | User registration |
+| `POST` | `/api/auth/login/` | Email/phone login |
+| `POST` | `/api/auth/send-otp/` | Send OTP (email/SMS) |
+| `POST` | `/api/auth/verify-otp/` | Verify OTP code |
+| `POST` | `/api/auth/google/` | Google OAuth login |
+| `POST` | `/api/auth/validate-face/` | Face validation |
+| `POST` | `/api/auth/token/refresh/` | Refresh JWT token |
+| `GET` | `/api/auth/user/` | Get current user |
 
-### Courses & Learning
+### Course & Learning Endpoints
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/courses/` | List all courses |
-| GET | `/api/courses/{id}/` | Course details |
-| POST | `/api/courses/{id}/enroll/` | Enroll in course |
-| GET | `/api/enrollments/` | User's enrolled courses |
-| POST | `/api/recommend/` | Get recommendations |
-| GET | `/api/youtube/video-info/` | YouTube video details & chapters |
+| `GET` | `/api/courses/` | List all courses |
+| `GET` | `/api/courses/{id}/` | Course details |
+| `GET` | `/api/courses/categories/` | Course categories |
+| `GET` | `/api/courses/platforms/` | Available platforms |
+| `POST` | `/api/recommend/` | Course recommendations |
+| `POST` | `/api/recommend/text/` | Query-based recommendations |
+| `POST` | `/api/courses/{id}/enroll/` | Enroll in course |
+| `GET` | `/api/courses/{id}/enrollment-status/` | Check enrollment |
+| `GET` | `/api/enrollments/` | User's enrolled courses |
+| `PUT` | `/api/enrollments/{id}/` | Update progress |
+| `GET` | `/api/youtube/video-info/` | YouTube video details |
 
-### Study Rooms
+### Study Room Endpoints
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/rooms/` | List study rooms |
-| POST | `/api/rooms/` | Create room |
-| POST | `/api/rooms/join-by-code/` | Join via code |
-| POST | `/api/rooms/{id}/join/` | Join room |
-| POST | `/api/rooms/{id}/leave/` | Leave room |
-| GET | `/api/rooms/{id}/messages/` | Room chat |
-| POST | `/api/rooms/{id}/timer/` | Control Pomodoro timer |
+| `GET` | `/api/rooms/` | List study rooms |
+| `POST` | `/api/rooms/` | Create new room |
+| `GET` | `/api/rooms/categories/` | Room categories |
+| `POST` | `/api/rooms/join-by-code/` | Join via room code |
+| `GET` | `/api/rooms/{id}/` | Room details |
+| `POST` | `/api/rooms/{id}/join/` | Join room |
+| `POST` | `/api/rooms/{id}/leave/` | Leave room |
+| `GET` | `/api/rooms/{id}/messages/` | Room chat history |
+| `POST` | `/api/rooms/{id}/messages/` | Send message |
+| `POST` | `/api/rooms/{id}/timer/` | Control Pomodoro timer |
+| `GET` | `/api/rooms/{id}/participants/` | List participants |
+| `POST` | `/api/rooms/{id}/toggle-status/` | Toggle mic/camera |
 
-### AI Features
+### AI & Focus Endpoints
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/chat-guide/` | AI chat tutor |
-| POST | `/api/upload-resume/` | Resume analysis |
-| GET | `/api/focus/stats/` | Focus session stats |
-| POST | `/api/focus/save-session/` | Save focus session |
+| `POST` | `/api/chat-guide/` | AI chat tutor |
+| `GET` | `/api/chat-history/` | Chat conversations |
+| `GET` | `/api/chat-history/{id}/` | Specific conversation |
+| `POST` | `/api/upload-resume/` | Resume analysis |
+| `GET` | `/api/focus/stats/` | Focus session stats |
+| `POST` | `/api/focus/save-session/` | Save focus session |
+| `GET` | `/video_feed/` | Live webcam stream |
 
 ---
 
@@ -243,88 +511,165 @@ DEBUG=True
 
 ```
 apex-ai/
-├── apex_backend/           # Django backend
-│   ├── accounts/           # User authentication
-│   ├── learning/           # Core learning features
-│   │   ├── api/            # REST API views & serializers
-│   │   ├── models.py       # Course, Enrollment, StudyRoom models
-│   │   ├── recommender.py  # ML recommendation engine
-│   │   ├── ai_providers.py # Multi-AI support (Gemini, Groq, Cohere)
-│   │   └── focus_mode.py   # Face detection logic
-│   └── apex_backend/       # Django settings
 │
-├── apex_frontend/          # Next.js frontend
-│   ├── app/                # App router pages
-│   │   ├── dashboard/      # Course discovery
-│   │   ├── learn/[id]/     # YouTube embedded learning
-│   │   ├── my-courses/     # Enrolled courses
-│   │   ├── study-room/     # Collaborative rooms
-│   │   ├── focus-mode/     # Attention tracking
-│   │   ├── chat/           # AI tutor
-│   │   ├── career/         # Resume analysis
-│   │   └── ...             # Static pages
-│   ├── components/         # Reusable components
-│   ├── contexts/           # Auth, Chat contexts
-│   └── lib/                # API client & utilities
+├── apex_backend/                    # Django Backend
+│   ├── accounts/                    # User Authentication
+│   │   ├── models.py               # ApexUser model
+│   │   ├── views.py                # Auth views (login, register, OTP)
+│   │   └── serializers.py          # DRF serializers
+│   │
+│   ├── learning/                    # Core Learning Features
+│   │   ├── api/
+│   │   │   ├── views.py            # All API views
+│   │   │   ├── serializers.py      # Course, Room serializers
+│   │   │   └── urls.py             # URL routing
+│   │   ├── models.py               # Course, Enrollment, StudyRoom models
+│   │   ├── recommender.py          # TF-IDF recommendation engine
+│   │   ├── ai_providers.py         # Gemini, Groq, Cohere integration
+│   │   ├── focus_mode.py           # OpenCV face detection
+│   │   └── cascades/               # Haar cascade files
+│   │
+│   ├── apex_backend/               # Django Settings
+│   │   ├── settings.py             # Configuration
+│   │   └── urls.py                 # Root URL routing
+│   │
+│   ├── requirements.txt            # Python dependencies
+│   └── manage.py                   # Django CLI
 │
-├── start.bat               # Windows quick start
-├── stop.bat                # Stop servers
-└── README.md
+├── apex_frontend/                   # Next.js Frontend
+│   ├── app/                        # App Router Pages
+│   │   ├── page.tsx                # Landing page
+│   │   ├── login/                  # Authentication
+│   │   ├── register/
+│   │   ├── dashboard/              # Course discovery
+│   │   ├── course/[id]/            # Course details
+│   │   ├── learn/[id]/             # YouTube learning
+│   │   ├── my-courses/             # Enrolled courses
+│   │   ├── focus-mode/             # Attention tracking
+│   │   ├── study-room/             # Collaborative rooms
+│   │   ├── chat/                   # AI tutor
+│   │   ├── career/                 # Resume analysis
+│   │   ├── settings/               # User settings
+│   │   ├── about/                  # Static pages
+│   │   ├── blog/
+│   │   ├── careers/
+│   │   ├── contact/
+│   │   ├── privacy-policy/
+│   │   ├── terms-of-service/
+│   │   └── cookie-policy/
+│   │
+│   ├── components/                 # Reusable Components
+│   │   ├── Navbar.tsx
+│   │   ├── Footer.tsx
+│   │   ├── CourseCard.tsx
+│   │   ├── StartCourseModal.tsx
+│   │   ├── FocusStats.tsx
+│   │   └── LoadingSpinner.tsx
+│   │
+│   ├── contexts/                   # React Contexts
+│   │   ├── AuthContext.tsx
+│   │   └── ChatContext.tsx
+│   │
+│   ├── lib/                        # Utilities
+│   │   ├── api.ts                  # API client
+│   │   └── utils.ts                # Helper functions
+│   │
+│   └── package.json                # Node dependencies
+│
+├── docs/                           # Documentation
+│   └── screenshots/                # Screenshot images
+│       ├── features/
+│       └── pages/
+│
+├── start.bat                       # Windows quick start
+├── stop.bat                        # Stop servers
+└── README.md                       # This file
 ```
-
----
-
-## 🚀 Feature Checklist
-
-- [x] User authentication (email, phone, Google OAuth)
-- [x] OTP verification (SMS + Email)
-- [x] Course recommendation engine (TF-IDF + Cosine)
-- [x] AI chat tutor (Gemini with Groq/Cohere fallbacks)
-- [x] Face validation system
-- [x] Focus mode with attention tracking
-- [x] Course enrollment & progress tracking
-- [x] YouTube embedded learning with chapters
-- [x] Collaborative study rooms with Pomodoro
-- [x] Live video/audio in study rooms
-- [x] Speaking indicators (Web Audio API)
-- [x] Career page with resume analysis
-- [x] Complete static pages (About, Blog, Careers, Contact, Legal)
-- [ ] Proctored assessments
-- [ ] Learning badges & streaks
-- [ ] Mobile app (React Native)
 
 ---
 
 ## 🎯 SDG 4 Alignment
 
-This project directly supports **UN Sustainable Development Goal 4: Quality Education** by:
+This project directly supports **UN Sustainable Development Goal 4: Quality Education** through:
 
-1. **Accessible Education** - Aggregates free courses from 14+ platforms
-2. **Personalized Learning** - AI recommendations based on skills and goals
-3. **Learning Support** - 24/7 AI tutor for instant doubt clearance
-4. **Accountability** - Focus mode tracks actual attention, not just video completion
-5. **Collaboration** - Study rooms enable peer learning
+| SDG 4 Target | APEX Feature | Implementation |
+|--------------|--------------|----------------|
+| **4.1** Ensure quality primary/secondary education | Multi-platform course aggregation | Courses from 14+ free and paid platforms |
+| **4.3** Equal access to technical/vocational education | AI-powered recommendations | Personalized learning paths for all skill levels |
+| **4.4** Increase youth with relevant skills | Career guidance & resume analysis | AI-driven skill gap analysis and course suggestions |
+| **4.5** Eliminate disparities in education | Free course aggregation | YouTube, freeCodeCamp, NPTEL, MIT OCW - all free |
+| **4.6** Ensure literacy and numeracy | 24/7 AI tutor | Instant doubt clearance in any subject |
+| **4.7** Education for sustainable development | Collaborative study rooms | Peer learning and knowledge sharing |
+
+---
+
+## 🚀 Feature Checklist
+
+### Completed Features ✅
+
+- [x] User authentication (email, phone, Google OAuth)
+- [x] OTP verification (SMS via Twilio + Email via Brevo)
+- [x] Face validation for profile verification
+- [x] JWT authentication with refresh tokens
+- [x] Course recommendation engine (TF-IDF + Cosine Similarity)
+- [x] Multi-platform course aggregation (14+ platforms)
+- [x] AI chat tutor (Gemini with Groq/Cohere fallbacks)
+- [x] YouTube embedded learning with chapter navigation
+- [x] Course enrollment and progress tracking
+- [x] Focus mode with real-time face detection
+- [x] Focus points gamification
+- [x] Collaborative study rooms
+- [x] Pomodoro timer with host controls
+- [x] Live video/audio in study rooms
+- [x] Speaking indicators (Web Audio API)
+- [x] Room chat functionality
+- [x] Career page with resume analysis
+- [x] Complete static pages (About, Blog, Careers, Contact, Legal)
+- [x] Responsive mobile-first design
+- [x] Dark mode cyberpunk theme
+
+### Future Roadmap 📋
+
+- [ ] Proctored assessments using face validation
+- [ ] Learning badges and achievement streaks
+- [ ] Auto-generated quizzes from course content
+- [ ] Voice-based AI tutor
+- [ ] Certificate generation
+- [ ] Organization/enterprise dashboards
+- [ ] Mobile app (React Native)
+- [ ] Offline course downloads
+
+---
+
+## 👨‍💻 Contributors
+
+| Name | Role | GitHub |
+|------|------|--------|
+| **Mehetab Shaaz** | Full Stack Developer | [@mehetab-01](https://github.com/mehetab-01) |
 
 ---
 
 ## 📄 License
 
-MIT License - feel free to use this project for learning or commercial purposes.
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 👨‍💻 Author
+## 🙏 Acknowledgments
 
-**Mehetab Shaaz**
-
-- GitHub: [@mehetab-01](https://github.com/mehetab-01)
+- Google Gemini for AI chat capabilities
+- OpenCV community for face detection algorithms
+- YouTube Data API for video information
+- All the free course platforms that make education accessible
 
 ---
 
 <div align="center">
 
-**⭐ Star this repo if you find it helpful!**
+### 🌟 Star this repo if you find it helpful!
 
-*Built with ❤️ for quality education*
+**Built with ❤️ for Quality Education (SDG 4)**
+
+[Report Bug](https://github.com/mehetab-01/apex-ai/issues) • [Request Feature](https://github.com/mehetab-01/apex-ai/issues)
 
 </div>
