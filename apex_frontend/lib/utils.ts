@@ -9,13 +9,14 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Format price for display
+ * Format price for display in INR
  */
 export function formatPrice(price: number | undefined | null): string {
   if (price === undefined || price === null || price === 0) return "Free";
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("en-IN", {
     style: "currency",
-    currency: "USD",
+    currency: "INR",
+    maximumFractionDigits: 0,
   }).format(price);
 }
 
@@ -128,7 +129,7 @@ export function timeAgo(dateString: string): string {
   const date = new Date(dateString);
   const now = new Date();
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  
+
   const intervals: [number, string][] = [
     [31536000, "year"],
     [2592000, "month"],
@@ -137,13 +138,151 @@ export function timeAgo(dateString: string): string {
     [60, "minute"],
     [1, "second"],
   ];
-  
+
   for (const [secondsInInterval, name] of intervals) {
     const interval = Math.floor(seconds / secondsInInterval);
     if (interval >= 1) {
       return `${interval} ${name}${interval > 1 ? "s" : ""} ago`;
     }
   }
-  
+
   return "just now";
+}
+
+/**
+ * Extract YouTube video ID from various URL formats
+ * Supports: youtube.com/watch?v=, youtu.be/, youtube.com/embed/, youtube.com/v/
+ */
+export function extractYouTubeId(url: string): string | null {
+  if (!url) return null;
+
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtube\.com\/watch\?.+&v=)([^&]+)/,
+    /(?:youtu\.be\/)([^?&]+)/,
+    /(?:youtube\.com\/embed\/)([^?&]+)/,
+    /(?:youtube\.com\/v\/)([^?&]+)/,
+    /(?:youtube\.com\/shorts\/)([^?&]+)/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Check if URL is a YouTube video
+ */
+export function isYouTubeUrl(url: string): boolean {
+  if (!url) return false;
+  return url.includes("youtube.com") || url.includes("youtu.be");
+}
+
+/**
+ * Get embed URL for supported platforms
+ */
+export function getEmbedUrl(url: string, platform?: string): string | null {
+  if (!url) return null;
+
+  // YouTube
+  if (isYouTubeUrl(url)) {
+    const videoId = extractYouTubeId(url);
+    if (videoId) {
+      return `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&enablejsapi=1`;
+    }
+  }
+
+  // Coursera (they don't allow embedding, return null)
+  if (url.includes("coursera.org")) {
+    return null;
+  }
+
+  // Udemy (they don't allow embedding, return null)
+  if (url.includes("udemy.com")) {
+    return null;
+  }
+
+  return null;
+}
+
+/**
+ * Extract YouTube playlist ID from various URL formats
+ * Supports: youtube.com/playlist?list=, youtube.com/watch?v=...&list=
+ */
+export function extractPlaylistId(url: string): string | null {
+  if (!url) return null;
+
+  const patterns = [
+    /[?&]list=([^&]+)/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Check if URL is a YouTube playlist
+ */
+export function isYouTubePlaylist(url: string): boolean {
+  if (!url) return false;
+  return isYouTubeUrl(url) && url.includes("list=");
+}
+
+/**
+ * Parse timestamp string (e.g., "1:23:45" or "23:45" or "45") to seconds
+ */
+export function parseTimestamp(timestamp: string): number {
+  const parts = timestamp.split(":").map(Number);
+  if (parts.length === 3) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  } else if (parts.length === 2) {
+    return parts[0] * 60 + parts[1];
+  } else if (parts.length === 1) {
+    return parts[0];
+  }
+  return 0;
+}
+
+/**
+ * Format seconds to timestamp string (e.g., "1:23:45" or "23:45")
+ */
+export function formatTimestamp(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  }
+  return `${minutes}:${secs.toString().padStart(2, "0")}`;
+}
+
+/**
+ * YouTube chapter/timestamp interface
+ */
+export interface YouTubeChapter {
+  title: string;
+  timestamp: string;
+  seconds: number;
+}
+
+/**
+ * YouTube playlist video interface
+ */
+export interface PlaylistVideo {
+  videoId: string;
+  title: string;
+  thumbnail: string;
+  duration?: string;
+  position: number;
 }

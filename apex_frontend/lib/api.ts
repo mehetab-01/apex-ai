@@ -162,10 +162,14 @@ export interface RecommendedCourse extends Course {
 export interface FocusStats {
   frame_count: number;
   face_detected_count: number;
+  eyes_open_count?: number;
+  eye_open_ratio?: number;
   attention_score: number;
   accumulated_points: number;
   elapsed_seconds: number;
   elapsed_minutes: number;
+  blink_count?: number;
+  eye_tracking_enabled?: boolean;
 }
 
 export interface CareerAnalysis {
@@ -219,6 +223,29 @@ export interface ChatConversation {
   updated_at: string;
 }
 
+export interface Enrollment {
+  id: string;
+  course: Course;
+  status: 'viewed' | 'started' | 'in_progress' | 'completed' | 'dropped';
+  status_display: string;
+  progress_percentage: number;
+  time_spent_minutes: number;
+  focus_sessions: number;
+  focus_points_earned: number;
+  rating: number | null;
+  notes: string;
+  first_viewed_at: string;
+  last_accessed_at: string;
+  completed_at: string | null;
+}
+
+export interface EnrollmentStats {
+  started: number;
+  in_progress: number;
+  completed: number;
+  total: number;
+}
+
 // ============================================
 // API Functions
 // ============================================
@@ -259,6 +286,52 @@ export async function getCategories(): Promise<{ value: string; label: string }[
  */
 export async function getPlatforms(): Promise<{ value: string; label: string }[]> {
   const response = await api.get('/courses/platforms/');
+  return response.data;
+}
+
+/**
+ * Fetch courses from external platforms (YouTube, Udemy, Coursera, NPTEL, Cisco)
+ */
+export interface FetchExternalCoursesParams {
+  platforms?: string[];
+  category?: string;
+  count?: number;
+  page?: number;
+  save?: boolean;
+}
+
+export interface FetchExternalCoursesResponse {
+  status: string;
+  count: number;
+  saved_count: number;
+  platforms: string[];
+  page: number;
+  has_more: boolean;
+  courses: Course[];
+}
+
+export async function fetchExternalCourses(
+  params?: FetchExternalCoursesParams
+): Promise<FetchExternalCoursesResponse> {
+  const queryParams: Record<string, string> = {};
+
+  if (params?.platforms && params.platforms.length > 0) {
+    queryParams.platforms = params.platforms.join(',');
+  }
+  if (params?.category) {
+    queryParams.category = params.category;
+  }
+  if (params?.count) {
+    queryParams.count = params.count.toString();
+  }
+  if (params?.page) {
+    queryParams.page = params.page.toString();
+  }
+  if (params?.save) {
+    queryParams.save = 'true';
+  }
+
+  const response = await api.get('/courses/fetch-external/', { params: queryParams });
   return response.data;
 }
 
@@ -401,6 +474,42 @@ export async function getFocusStats(): Promise<FocusStats> {
 }
 
 /**
+ * Save focus session results to user profile
+ */
+export async function saveFocusSession(data: {
+  points: number;
+  duration_seconds: number;
+  attention_score: number;
+}): Promise<{
+  status: string;
+  message: string;
+  user_stats: {
+    total_focus_points: number;
+    total_focus_time_minutes: number;
+    session_points: number;
+    session_duration_seconds: number;
+  };
+}> {
+  const response = await api.post('/focus/save-session/', data);
+  return response.data;
+}
+
+/**
+ * End focus session and release camera
+ */
+export async function endFocusSession(): Promise<{
+  status: string;
+  message: string;
+  stats: FocusStats;
+}> {
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  const response = await fetch(`${API_BASE_URL}/end_focus_session/`, {
+    method: 'POST',
+  });
+  return response.json();
+}
+
+/**
  * Health check
  */
 export async function healthCheck(): Promise<{
@@ -489,6 +598,130 @@ export async function removeDisplayPicture(): Promise<{
   message: string;
 }> {
   const response = await api.delete('/auth/display-picture/');
+  return response.data;
+}
+
+// ============================================
+// Course Enrollment API Functions
+// ============================================
+
+/**
+ * Enroll in a course
+ */
+export async function enrollInCourse(courseId: string): Promise<{
+  status: string;
+  message: string;
+  enrollment: Enrollment;
+  is_new: boolean;
+}> {
+  const response = await api.post(`/courses/${courseId}/enroll/`);
+  return response.data;
+}
+
+/**
+ * Check enrollment status for a course
+ */
+export async function getEnrollmentStatus(courseId: string): Promise<{
+  status: string;
+  is_enrolled: boolean;
+  enrollment: Enrollment | null;
+}> {
+  const response = await api.get(`/courses/${courseId}/enrollment-status/`);
+  return response.data;
+}
+
+/**
+ * Get all user enrollments
+ */
+export async function getUserEnrollments(statusFilter?: string): Promise<{
+  status: string;
+  count: number;
+  stats: EnrollmentStats;
+  enrollments: Enrollment[];
+}> {
+  const params = statusFilter ? { status: statusFilter } : {};
+  const response = await api.get('/enrollments/', { params });
+  return response.data;
+}
+
+/**
+ * Update enrollment progress
+ */
+export async function updateEnrollment(
+  enrollmentId: string,
+  data: {
+    progress_percentage?: number;
+    status?: string;
+    time_spent_minutes?: number;
+    rating?: number;
+    notes?: string;
+  }
+): Promise<{
+  status: string;
+  message: string;
+  enrollment: Enrollment;
+}> {
+  const response = await api.put(`/enrollments/${enrollmentId}/`, data);
+  return response.data;
+}
+
+// ============================================
+// YouTube Video Info API Functions
+// ============================================
+
+export interface YouTubeChapter {
+  title: string;
+  timestamp: string;
+  seconds: number;
+}
+
+export interface PlaylistVideo {
+  position: number;
+  video_id: string;
+  title: string;
+  thumbnail: string;
+  channel?: string;
+}
+
+export interface YouTubeVideoInfo {
+  id: string;
+  title: string;
+  description: string;
+  thumbnail: string;
+  channel: string;
+  published_at: string;
+  view_count: number;
+  like_count: number;
+  duration_seconds: number;
+  duration_formatted: string;
+}
+
+export interface YouTubePlaylistInfo {
+  id: string;
+  title: string;
+  videos: PlaylistVideo[];
+  total_videos: number;
+}
+
+export interface YouTubeVideoInfoResponse {
+  status: string;
+  video: YouTubeVideoInfo | null;
+  chapters: YouTubeChapter[];
+  playlist: YouTubePlaylistInfo | null;
+}
+
+/**
+ * Get YouTube video info including chapters and playlist
+ */
+export async function getYouTubeVideoInfo(
+  videoId?: string,
+  playlistId?: string
+): Promise<YouTubeVideoInfoResponse> {
+  const params: Record<string, string> = {};
+  if (videoId) params.video_id = videoId;
+  if (playlistId) params.playlist_id = playlistId;
+
+  const response = await api.get('/youtube/video-info/', { params });
   return response.data;
 }
 

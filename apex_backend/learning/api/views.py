@@ -1066,17 +1066,75 @@ class AIProvidersView(APIView):
 class FocusStatsAPIView(APIView):
     """
     API endpoint for focus session statistics.
-    
+
     GET /api/focus/stats/
         Returns current focus session statistics
     """
-    
+
     def get(self, request):
         stats = get_current_focus_stats()
         return Response({
             'status': 'success',
             'stats': stats
         })
+
+
+class SaveFocusSessionView(APIView):
+    """
+    API endpoint for saving focus session results to user profile.
+
+    POST /api/focus/save-session/
+        Input: points, duration_seconds, attention_score
+        Output: Updated user stats
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from accounts.models import ApexUser
+
+        points = request.data.get('points', 0)
+        duration_seconds = request.data.get('duration_seconds', 0)
+        attention_score = request.data.get('attention_score', 0)
+
+        try:
+            user = request.user
+
+            # Update user's focus stats
+            user.focus_points += int(points)
+            user.total_focus_time_minutes += int(duration_seconds // 60)
+            user.save(update_fields=['focus_points', 'total_focus_time_minutes'])
+
+            # Optionally create a FocusSession record for history
+            try:
+                from django.utils import timezone
+                focus_session = FocusSession.objects.create(
+                    duration_minutes=duration_seconds // 60,
+                    points_earned=points,
+                    attention_score=attention_score,
+                    is_active=False,
+                    ended_at=timezone.now()
+                )
+            except Exception as e:
+                logger.warning(f"Could not create FocusSession record: {e}")
+
+            return Response({
+                'status': 'success',
+                'message': 'Focus session saved successfully',
+                'user_stats': {
+                    'total_focus_points': user.focus_points,
+                    'total_focus_time_minutes': user.total_focus_time_minutes,
+                    'session_points': points,
+                    'session_duration_seconds': duration_seconds
+                }
+            })
+
+        except Exception as e:
+            logger.error(f"Save focus session error: {e}")
+            return Response(
+                {'status': 'error', 'message': f'Failed to save focus session: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 # ============================================
@@ -1105,6 +1163,214 @@ class StudentProfileView(APIView):
                 {'status': 'error', 'message': 'Profile not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+
+# ============================================
+# Course Enrollment Views
+# ============================================
+
+class CourseEnrollView(APIView):
+    """
+    API endpoint for enrolling in a course.
+
+    POST /api/courses/<course_id>/enroll/
+        Enrolls the user in the course (creates LearningLog)
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, course_id):
+        try:
+            course = Course.objects.get(id=course_id)
+        except Course.DoesNotExist:
+            return Response(
+                {'status': 'error', 'message': 'Course not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Get or create student profile
+        profile, _ = StudentProfile.objects.get_or_create(user=request.user)
+
+        # Check if already enrolled
+        existing_log = LearningLog.objects.filter(student=profile, course=course).first()
+
+        if existing_log:
+            existing_log.save()  # Updates last_accessed_at
+            serializer = LearningLogSerializer(existing_log, context={'request': request})
+            return Response({
+                'status': 'success',
+                'message': 'Already enrolled in this course',
+                'enrollment': serializer.data,
+                'is_new': False
+            })
+
+        # Create new enrollment
+        learning_log = LearningLog.objects.create(
+            student=profile,
+            course=course,
+            status='started'
+        )
+
+        # Update course enrollment count
+        course.total_enrollments += 1
+        course.save(update_fields=['total_enrollments'])
+
+        serializer = LearningLogSerializer(learning_log, context={'request': request})
+
+        return Response({
+            'status': 'success',
+            'message': 'Successfully enrolled in course',
+            'enrollment': serializer.data,
+            'is_new': True
+        }, status=status.HTTP_201_CREATED)
+
+
+class EnrollmentStatusView(APIView):
+    """
+    API endpoint to check enrollment status for a course.
+
+    GET /api/courses/<course_id>/enrollment-status/
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, course_id):
+        try:
+            course = Course.objects.get(id=course_id)
+        except Course.DoesNotExist:
+            return Response(
+                {'status': 'error', 'message': 'Course not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            profile = StudentProfile.objects.get(user=request.user)
+        except StudentProfile.DoesNotExist:
+            return Response({
+                'status': 'success',
+                'is_enrolled': False,
+                'enrollment': None
+            })
+
+        learning_log = LearningLog.objects.filter(student=profile, course=course).first()
+
+        if learning_log:
+            serializer = LearningLogSerializer(learning_log, context={'request': request})
+            return Response({
+                'status': 'success',
+                'is_enrolled': True,
+                'enrollment': serializer.data
+            })
+
+        return Response({
+            'status': 'success',
+            'is_enrolled': False,
+            'enrollment': None
+        })
+
+
+class UserEnrollmentsView(APIView):
+    """
+    API endpoint to get all user's enrolled courses.
+
+    GET /api/enrollments/
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            profile = StudentProfile.objects.get(user=request.user)
+        except StudentProfile.DoesNotExist:
+            return Response({
+                'status': 'success',
+                'count': 0,
+                'enrollments': []
+            })
+
+        status_filter = request.query_params.get('status', None)
+        logs = LearningLog.objects.filter(student=profile).select_related('course')
+
+        if status_filter:
+            logs = logs.filter(status=status_filter)
+
+        logs = logs.order_by('-last_accessed_at')
+        serializer = LearningLogSerializer(logs, many=True, context={'request': request})
+
+        stats = {
+            'started': LearningLog.objects.filter(student=profile, status='started').count(),
+            'in_progress': LearningLog.objects.filter(student=profile, status='in_progress').count(),
+            'completed': LearningLog.objects.filter(student=profile, status='completed').count(),
+            'total': logs.count()
+        }
+
+        return Response({
+            'status': 'success',
+            'count': logs.count(),
+            'stats': stats,
+            'enrollments': serializer.data
+        })
+
+
+class UpdateEnrollmentView(APIView):
+    """
+    API endpoint to update enrollment progress.
+
+    PUT /api/enrollments/<enrollment_id>/
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, enrollment_id):
+        try:
+            profile = StudentProfile.objects.get(user=request.user)
+        except StudentProfile.DoesNotExist:
+            return Response(
+                {'status': 'error', 'message': 'Profile not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            learning_log = LearningLog.objects.get(id=enrollment_id, student=profile)
+        except LearningLog.DoesNotExist:
+            return Response(
+                {'status': 'error', 'message': 'Enrollment not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if 'progress_percentage' in request.data:
+            learning_log.progress_percentage = min(100, max(0, int(request.data['progress_percentage'])))
+            if learning_log.progress_percentage == 100:
+                learning_log.status = 'completed'
+                from django.utils import timezone
+                learning_log.completed_at = timezone.now()
+                request.user.courses_completed += 1
+                request.user.save(update_fields=['courses_completed'])
+            elif learning_log.progress_percentage > 0:
+                learning_log.status = 'in_progress'
+
+        if 'status' in request.data:
+            valid_statuses = ['viewed', 'started', 'in_progress', 'completed', 'dropped']
+            if request.data['status'] in valid_statuses:
+                learning_log.status = request.data['status']
+
+        if 'time_spent_minutes' in request.data:
+            learning_log.time_spent_minutes = int(request.data['time_spent_minutes'])
+
+        if 'rating' in request.data:
+            learning_log.rating = min(5, max(1, int(request.data['rating'])))
+
+        if 'notes' in request.data:
+            learning_log.notes = request.data['notes']
+
+        learning_log.save()
+        serializer = LearningLogSerializer(learning_log, context={'request': request})
+
+        return Response({
+            'status': 'success',
+            'message': 'Enrollment updated',
+            'enrollment': serializer.data
+        })
 
 
 # ============================================
@@ -1369,5 +1635,353 @@ class SaveProfilePictureView(APIView):
             logger.error(f"Save profile pic error: {e}")
             return Response(
                 {'status': 'error', 'message': f'Failed to save profile picture: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+# ============================================
+# YouTube Video Info
+# ============================================
+
+class YouTubeVideoInfoView(APIView):
+    """
+    API endpoint for fetching YouTube video details including chapters and playlist.
+
+    GET /api/youtube/video-info/
+        Query params:
+            - video_id: YouTube video ID
+            - playlist_id: YouTube playlist ID (optional)
+
+    Returns:
+        Video details, chapters (timestamps), and playlist videos if applicable
+    """
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        import re
+        import requests
+
+        video_id = request.query_params.get('video_id', '')
+        playlist_id = request.query_params.get('playlist_id', '')
+
+        if not video_id and not playlist_id:
+            return Response(
+                {'status': 'error', 'message': 'video_id or playlist_id required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        result = {
+            'status': 'success',
+            'video': None,
+            'chapters': [],
+            'playlist': None
+        }
+
+        youtube_api_key = getattr(settings, 'YOUTUBE_API_KEY', None)
+
+        # Fetch video details
+        if video_id:
+            video_data = self._get_video_details(video_id, youtube_api_key)
+            if video_data:
+                result['video'] = video_data
+                # Parse chapters from description
+                if video_data.get('description'):
+                    result['chapters'] = self._parse_chapters(video_data['description'])
+
+        # Fetch playlist if provided
+        if playlist_id:
+            playlist_data = self._get_playlist_videos(playlist_id, youtube_api_key)
+            if playlist_data:
+                result['playlist'] = playlist_data
+
+        return Response(result)
+
+    def _get_video_details(self, video_id: str, api_key: str = None) -> dict:
+        """Fetch video details from YouTube API or fallback."""
+        import requests
+
+        if api_key:
+            try:
+                url = f"https://www.googleapis.com/youtube/v3/videos"
+                params = {
+                    'part': 'snippet,contentDetails,statistics',
+                    'id': video_id,
+                    'key': api_key
+                }
+                response = requests.get(url, params=params, timeout=10)
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get('items'):
+                        item = data['items'][0]
+                        snippet = item.get('snippet', {})
+                        stats = item.get('statistics', {})
+                        content = item.get('contentDetails', {})
+
+                        # Parse duration
+                        duration_str = content.get('duration', 'PT0S')
+                        duration_seconds = self._parse_iso_duration(duration_str)
+
+                        return {
+                            'id': video_id,
+                            'title': snippet.get('title', ''),
+                            'description': snippet.get('description', ''),
+                            'thumbnail': snippet.get('thumbnails', {}).get('high', {}).get('url', ''),
+                            'channel': snippet.get('channelTitle', ''),
+                            'published_at': snippet.get('publishedAt', ''),
+                            'view_count': int(stats.get('viewCount', 0)),
+                            'like_count': int(stats.get('likeCount', 0)),
+                            'duration_seconds': duration_seconds,
+                            'duration_formatted': self._format_duration(duration_seconds)
+                        }
+            except Exception as e:
+                logger.warning(f"YouTube API error: {e}")
+
+        # Fallback: Return basic info without API
+        return {
+            'id': video_id,
+            'title': '',
+            'description': '',
+            'thumbnail': f'https://img.youtube.com/vi/{video_id}/hqdefault.jpg',
+            'channel': '',
+            'published_at': '',
+            'view_count': 0,
+            'like_count': 0,
+            'duration_seconds': 0,
+            'duration_formatted': ''
+        }
+
+    def _get_playlist_videos(self, playlist_id: str, api_key: str = None) -> dict:
+        """Fetch playlist videos from YouTube API."""
+        import requests
+
+        if not api_key:
+            return {
+                'id': playlist_id,
+                'title': 'Playlist',
+                'videos': [],
+                'total_videos': 0
+            }
+
+        try:
+            # Get playlist details
+            playlist_url = f"https://www.googleapis.com/youtube/v3/playlists"
+            params = {
+                'part': 'snippet',
+                'id': playlist_id,
+                'key': api_key
+            }
+            pl_response = requests.get(playlist_url, params=params, timeout=10)
+            playlist_title = 'Playlist'
+            if pl_response.status_code == 200:
+                pl_data = pl_response.json()
+                if pl_data.get('items'):
+                    playlist_title = pl_data['items'][0].get('snippet', {}).get('title', 'Playlist')
+
+            # Get playlist items
+            items_url = f"https://www.googleapis.com/youtube/v3/playlistItems"
+            params = {
+                'part': 'snippet,contentDetails',
+                'playlistId': playlist_id,
+                'maxResults': 50,
+                'key': api_key
+            }
+            response = requests.get(items_url, params=params, timeout=10)
+
+            if response.status_code == 200:
+                data = response.json()
+                videos = []
+
+                for idx, item in enumerate(data.get('items', [])):
+                    snippet = item.get('snippet', {})
+                    content = item.get('contentDetails', {})
+                    video_id = content.get('videoId', '')
+
+                    if video_id:
+                        videos.append({
+                            'position': idx,
+                            'video_id': video_id,
+                            'title': snippet.get('title', ''),
+                            'thumbnail': snippet.get('thumbnails', {}).get('default', {}).get('url', f'https://img.youtube.com/vi/{video_id}/default.jpg'),
+                            'channel': snippet.get('videoOwnerChannelTitle', ''),
+                        })
+
+                return {
+                    'id': playlist_id,
+                    'title': playlist_title,
+                    'videos': videos,
+                    'total_videos': len(videos)
+                }
+
+        except Exception as e:
+            logger.warning(f"YouTube playlist API error: {e}")
+
+        return {
+            'id': playlist_id,
+            'title': 'Playlist',
+            'videos': [],
+            'total_videos': 0
+        }
+
+    def _parse_chapters(self, description: str) -> list:
+        """Parse chapters/timestamps from video description."""
+        import re
+
+        chapters = []
+        lines = description.split('\n')
+
+        # Pattern to match timestamps like "0:00", "1:23", "01:23:45", etc.
+        timestamp_pattern = r'^[\s]*(\d{1,2}:)?(\d{1,2}):(\d{2})[\s]*[-–—]?\s*(.+)$'
+
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+
+            match = re.match(timestamp_pattern, line)
+            if match:
+                hours = match.group(1)
+                minutes = match.group(2)
+                seconds = match.group(3)
+                title = match.group(4).strip()
+
+                if hours:
+                    hours = int(hours.rstrip(':'))
+                else:
+                    hours = 0
+
+                total_seconds = hours * 3600 + int(minutes) * 60 + int(seconds)
+
+                # Format timestamp string
+                if hours > 0:
+                    timestamp = f"{hours}:{int(minutes):02d}:{int(seconds):02d}"
+                else:
+                    timestamp = f"{int(minutes)}:{int(seconds):02d}"
+
+                chapters.append({
+                    'title': title,
+                    'timestamp': timestamp,
+                    'seconds': total_seconds
+                })
+
+        return chapters
+
+    def _parse_iso_duration(self, duration: str) -> int:
+        """Parse ISO 8601 duration (PT1H23M45S) to seconds."""
+        import re
+
+        match = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration)
+        if match:
+            hours = int(match.group(1) or 0)
+            minutes = int(match.group(2) or 0)
+            seconds = int(match.group(3) or 0)
+            return hours * 3600 + minutes * 60 + seconds
+        return 0
+
+    def _format_duration(self, seconds: int) -> str:
+        """Format seconds to duration string."""
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+        secs = seconds % 60
+
+        if hours > 0:
+            return f"{hours}:{minutes:02d}:{secs:02d}"
+        return f"{minutes}:{secs:02d}"
+
+
+# ============================================
+# External Course Fetching
+# ============================================
+
+class FetchExternalCoursesView(APIView):
+    """
+    API endpoint for fetching courses from external platforms.
+    This is called by the "Load More" button on the dashboard.
+
+    GET /api/courses/fetch-external/
+        Query params:
+            - platforms: comma-separated list (default: youtube,udemy,coursera,nptel,cisco)
+            - category: filter by category
+            - count: courses per platform (default: 4)
+            - page: page number for pagination (default: 1)
+            - save: whether to save to database (default: false)
+
+    Returns:
+        List of courses from external platforms
+    """
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from learning.course_fetcher import get_course_fetcher
+
+        # Parse query parameters
+        platforms_str = request.query_params.get('platforms', 'youtube,udemy,coursera,nptel,cisco')
+        platforms = [p.strip() for p in platforms_str.split(',')]
+        category = request.query_params.get('category', None)
+        count_per_platform = int(request.query_params.get('count', 4))
+        page = int(request.query_params.get('page', 1))
+        save_to_db = request.query_params.get('save', 'false').lower() == 'true'
+
+        try:
+            fetcher = get_course_fetcher()
+
+            # Fetch courses from external platforms
+            courses = fetcher.fetch_courses(
+                platforms=platforms,
+                category=category,
+                count_per_platform=count_per_platform
+            )
+
+            if not courses:
+                return Response({
+                    'status': 'success',
+                    'count': 0,
+                    'courses': [],
+                    'message': 'No courses found from external platforms'
+                })
+
+            # Optionally save to database
+            saved_count = 0
+            if save_to_db:
+                saved_count = fetcher.save_courses_to_db(courses)
+
+            # Format courses for frontend
+            formatted_courses = []
+            for course in courses:
+                formatted_course = {
+                    'id': f"{course.get('platform', 'ext')}-{hash(course['title']) % 100000}",
+                    'title': course['title'],
+                    'description': course.get('description', ''),
+                    'instructor': course.get('instructor', 'Unknown'),
+                    'price': course.get('price', 0),
+                    'category': course.get('category', 'other'),
+                    'category_display': course.get('category', 'other').replace('_', ' ').title(),
+                    'difficulty': course.get('difficulty', 'beginner'),
+                    'difficulty_display': course.get('difficulty', 'beginner').title(),
+                    'platform': course.get('platform', 'external'),
+                    'platform_display': course.get('platform', 'external').upper(),
+                    'external_url': course.get('external_url', ''),
+                    'thumbnail_url': course.get('thumbnail_url', ''),
+                    'duration_hours': course.get('duration_hours', 0),
+                    'total_enrollments': course.get('total_enrollments', 0),
+                    'average_rating': course.get('average_rating', 0),
+                }
+                formatted_courses.append(formatted_course)
+
+            return Response({
+                'status': 'success',
+                'count': len(formatted_courses),
+                'saved_count': saved_count,
+                'platforms': platforms,
+                'page': page,
+                'has_more': True,  # External APIs always have more
+                'courses': formatted_courses
+            })
+
+        except Exception as e:
+            logger.error(f"External course fetch error: {e}")
+            return Response(
+                {'status': 'error', 'message': f'Failed to fetch external courses: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
