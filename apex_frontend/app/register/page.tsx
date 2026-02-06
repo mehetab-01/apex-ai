@@ -102,14 +102,13 @@ export default function RegisterPage() {
           setError("Registration failed");
         }
       } else {
-        // Use auth context login
-        login(data.user, data.tokens.access, data.tokens.refresh);
-        
-        // Show OTP in dev mode
+        // Don't login yet - wait for OTP verification
+        // Show OTP in dev mode only
         if (data.otp_code) {
           alert(`Development OTP: ${data.otp_code}`);
         }
-        
+
+        // Move to OTP verification step
         setStep("verify");
       }
     } catch (err) {
