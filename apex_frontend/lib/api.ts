@@ -336,6 +336,40 @@ export async function fetchExternalCourses(
 }
 
 /**
+ * AI-Powered Course Discovery
+ * Uses AI to generate search keywords, searches YouTube, validates results
+ */
+export interface DiscoverCoursesParams {
+  count?: number;
+  save?: boolean;
+}
+
+export interface DiscoverCoursesResponse {
+  status: string;
+  count: number;
+  saved_count: number;
+  keywords_used: string[];
+  has_more: boolean;
+  courses: Course[];
+}
+
+export async function discoverCourses(
+  params?: DiscoverCoursesParams
+): Promise<DiscoverCoursesResponse> {
+  const queryParams: Record<string, string> = {};
+
+  if (params?.count) {
+    queryParams.count = params.count.toString();
+  }
+  if (params?.save !== undefined) {
+    queryParams.save = params.save ? 'true' : 'false';
+  }
+
+  const response = await api.get('/courses/discover/', { params: queryParams });
+  return response.data;
+}
+
+/**
  * Get course recommendations based on a course ID
  */
 export async function getRecommendations(

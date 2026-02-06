@@ -1995,6 +1995,81 @@ class FetchExternalCoursesView(APIView):
             )
 
 
+class DiscoverCoursesView(APIView):
+    """
+    AI-Powered Course Discovery Endpoint.
+
+    GET /api/courses/discover/
+        Query params:
+            - count: number of courses to discover (default: 8, max: 20)
+            - save: whether to save discovered courses to DB (default: true)
+
+    Flow:
+        1. AI generates random tech search keywords
+        2. Keywords are used to search YouTube
+        3. Results are validated to ensure they're actual courses
+        4. Top courses are returned (and optionally saved to DB)
+    """
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from learning.ai_course_discovery import discover_courses, discover_and_save_courses
+
+        count = min(int(request.query_params.get('count', 8)), 20)
+        save_to_db = request.query_params.get('save', 'true').lower() == 'true'
+
+        try:
+            if save_to_db:
+                result = discover_and_save_courses(count)
+                courses = result['courses']
+                keywords = result['keywords_used']
+                saved_count = result['saved']
+            else:
+                courses, keywords = discover_courses(count)
+                saved_count = 0
+
+            # Format courses for frontend (same format as FetchExternalCoursesView)
+            formatted_courses = []
+            for course in courses:
+                formatted_course = {
+                    'id': f"yt-{hash(course['title']) % 100000}",
+                    'title': course['title'],
+                    'description': course.get('description', ''),
+                    'instructor': course.get('instructor', 'Unknown'),
+                    'price': course.get('price', 0),
+                    'category': course.get('category', 'other'),
+                    'category_display': course.get('category', 'other').replace('_', ' ').title(),
+                    'difficulty': course.get('difficulty', 'beginner'),
+                    'difficulty_display': course.get('difficulty', 'beginner').title(),
+                    'platform': course.get('platform', 'youtube'),
+                    'platform_display': course.get('platform', 'youtube').upper(),
+                    'external_url': course.get('external_url', ''),
+                    'thumbnail_url': course.get('thumbnail_url', ''),
+                    'duration_hours': course.get('duration_hours', 0),
+                    'total_enrollments': course.get('total_enrollments', 0),
+                    'average_rating': course.get('average_rating', 0),
+                    'tags': course.get('tags', ''),
+                }
+                formatted_courses.append(formatted_course)
+
+            return Response({
+                'status': 'success',
+                'count': len(formatted_courses),
+                'saved_count': saved_count,
+                'keywords_used': keywords,
+                'has_more': True,
+                'courses': formatted_courses,
+            })
+
+        except Exception as e:
+            logger.error(f"AI course discovery error: {e}")
+            return Response(
+                {'status': 'error', 'message': f'Course discovery failed: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
 # ============================================
 # Collaborative Study Room Views
 # ============================================

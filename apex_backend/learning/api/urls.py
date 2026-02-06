@@ -16,6 +16,7 @@ urlpatterns = [
     path('courses/categories/', views.CourseCategoriesView.as_view(), name='course_categories'),
     path('courses/platforms/', views.CoursePlatformsView.as_view(), name='course_platforms'),
     path('courses/fetch-external/', views.FetchExternalCoursesView.as_view(), name='fetch_external_courses'),
+    path('courses/discover/', views.DiscoverCoursesView.as_view(), name='discover_courses'),
     
     # Recommendations
     path('recommend/', views.RecommendationView.as_view(), name='recommend'),

@@ -20,7 +20,7 @@ import {
 import CourseCard from "@/components/CourseCard";
 import { PageLoader } from "@/components/LoadingSpinner";
 import ErrorDisplay, { EmptyState } from "@/components/ErrorDisplay";
-import { getCourses, getCategories, getPlatforms, fetchExternalCourses, type Course } from "@/lib/api";
+import { getCourses, getCategories, getPlatforms, fetchExternalCourses, discoverCourses, type Course } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export default function DashboardPage() {
@@ -104,12 +104,10 @@ export default function DashboardPage() {
     setLoadingMore(true);
 
     try {
-      // Fetch courses from external platforms via the backend API
-      const response = await fetchExternalCourses({
-        platforms: ['youtube', 'udemy', 'coursera', 'nptel', 'cisco'],
-        category: selectedCategory || undefined,
-        count: 3, // 3 courses per platform = ~15 total
-        page: page,
+      // Use AI-powered course discovery
+      const response = await discoverCourses({
+        count: 8,
+        save: true,
       });
 
       if (response.courses && response.courses.length > 0) {
@@ -120,8 +118,26 @@ export default function DashboardPage() {
         setHasMore(false);
       }
     } catch (err) {
-      console.error("Failed to fetch more courses:", err);
-      // Silently fail - user can try again
+      console.error("Failed to discover courses:", err);
+      // Fallback to original external fetch
+      try {
+        const response = await fetchExternalCourses({
+          platforms: ['youtube', 'udemy', 'coursera', 'nptel', 'cisco'],
+          category: selectedCategory || undefined,
+          count: 3,
+          page: page,
+        });
+
+        if (response.courses && response.courses.length > 0) {
+          setCourses(prev => [...prev, ...response.courses]);
+          setPage(prev => prev + 1);
+          setHasMore(response.has_more);
+        } else {
+          setHasMore(false);
+        }
+      } catch (fallbackErr) {
+        console.error("Fallback fetch also failed:", fallbackErr);
+      }
     } finally {
       setLoadingMore(false);
     }
@@ -498,17 +514,17 @@ export default function DashboardPage() {
               {loadingMore ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  Loading courses from YouTube, Udemy, Coursera...
+                  AI is discovering new courses...
                 </>
               ) : (
                 <>
                   <Sparkles className="w-5 h-5" />
-                  Load More Courses
+                  Discover New Courses
                 </>
               )}
             </button>
             <p className="text-gray-500 text-sm mt-3">
-              Fetches courses from YouTube, Udemy, Coursera, and Cisco
+              AI picks random tech topics, searches YouTube, and finds the best courses for you
             </p>
           </div>
         )}
