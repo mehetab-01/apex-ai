@@ -83,6 +83,7 @@ interface StudyRoom {
   pomodoro_rounds: number;
   timer_running: boolean;
   timer_started_at: string | null;
+  timer_paused_remaining: number | null;
   current_round: number;
   is_break: boolean;
   participants?: Participant[];
@@ -230,15 +231,20 @@ export default function StudyRoomPage() {
       return () => {
         if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
       };
-    } else {
-      const totalSeconds = currentRoom
-        ? currentRoom.is_break
+    } else if (currentRoom) {
+      // Paused: show remaining seconds if available, otherwise show full duration
+      if (currentRoom.timer_paused_remaining != null) {
+        setTimerSeconds(currentRoom.timer_paused_remaining);
+      } else {
+        const totalSeconds = currentRoom.is_break
           ? currentRoom.pomodoro_break_minutes * 60
-          : currentRoom.pomodoro_work_minutes * 60
-        : 0;
-      setTimerSeconds(totalSeconds);
+          : currentRoom.pomodoro_work_minutes * 60;
+        setTimerSeconds(totalSeconds);
+      }
+    } else {
+      setTimerSeconds(0);
     }
-  }, [currentRoom?.timer_running, currentRoom?.timer_started_at, currentRoom?.is_break]);
+  }, [currentRoom?.timer_running, currentRoom?.timer_started_at, currentRoom?.is_break, currentRoom?.timer_paused_remaining]);
 
   // ===== Speech detection via Web Audio API =====
   useEffect(() => {
@@ -489,6 +495,7 @@ export default function StudyRoomPage() {
                 ...prev,
                 timer_running: res.data.timer_running,
                 timer_started_at: res.data.timer_started_at,
+                timer_paused_remaining: res.data.timer_paused_remaining,
                 current_round: res.data.current_round,
                 is_break: res.data.is_break,
               }

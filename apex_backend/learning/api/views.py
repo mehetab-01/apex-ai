@@ -2424,10 +2424,22 @@ class RoomTimerView(APIView):
 
             if action == 'start' or (action == 'toggle' and not room.timer_running):
                 room.timer_running = True
-                room.timer_started_at = timezone.now()
+                if room.timer_paused_remaining is not None:
+                    # Resume from paused position: backdate timer_started_at
+                    total = (room.pomodoro_break_minutes if room.is_break else room.pomodoro_work_minutes) * 60
+                    elapsed = total - room.timer_paused_remaining
+                    room.timer_started_at = timezone.now() - timezone.timedelta(seconds=elapsed)
+                    room.timer_paused_remaining = None
+                else:
+                    room.timer_started_at = timezone.now()
                 msg = "Timer started! Let's focus 🎯"
 
             elif action == 'stop' or (action == 'toggle' and room.timer_running):
+                # Calculate remaining seconds before pausing
+                if room.timer_started_at:
+                    total = (room.pomodoro_break_minutes if room.is_break else room.pomodoro_work_minutes) * 60
+                    elapsed = (timezone.now() - room.timer_started_at).total_seconds()
+                    room.timer_paused_remaining = max(0, int(total - elapsed))
                 room.timer_running = False
                 room.timer_started_at = None
                 msg = "Timer paused ⏸️"
@@ -2437,6 +2449,7 @@ class RoomTimerView(APIView):
                 room.current_round = 1
                 room.is_break = False
                 room.timer_started_at = None
+                room.timer_paused_remaining = None
                 msg = "Timer reset 🔄"
 
             elif action == 'next_round':
@@ -2472,6 +2485,7 @@ class RoomTimerView(APIView):
                 'status': 'success',
                 'timer_running': room.timer_running,
                 'timer_started_at': room.timer_started_at,
+                'timer_paused_remaining': room.timer_paused_remaining,
                 'current_round': room.current_round,
                 'is_break': room.is_break,
                 'message': msg,

@@ -507,6 +507,7 @@ class StudyRoomDetailSerializer(serializers.ModelSerializer):
             'pomodoro_rounds',
             'timer_running',
             'timer_started_at',
+            'timer_paused_remaining',
             'current_round',
             'is_break',
             'participants',

@@ -849,6 +849,12 @@ class StudyRoom(models.Model):
         help_text="Whether it's currently a break period"
     )
     
+    timer_paused_remaining = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Remaining seconds when timer was paused"
+    )
+    
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
