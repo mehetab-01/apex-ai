@@ -804,72 +804,106 @@ export default function StudyRoomPage() {
                 Participants ({currentRoom.participants?.length || 0})
               </h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {currentRoom.participants?.map((p) => (
-                  <motion.div
-                    key={p.id}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="bg-apex-card rounded-xl p-4 border border-white/5 text-center relative"
-                  >
-                    {p.user_id === currentRoom.host_id && (
-                      <Crown className="w-4 h-4 text-yellow-400 absolute top-2 right-2" />
-                    )}
-                    <div className={`w-14 h-14 rounded-full mx-auto mb-2 flex items-center justify-center ${
-                      p.user_id === user?.id
-                        ? (isSpeaking && !isMuted ? "speaking-ring" : "speaking-ring-off")
-                        : (!p.is_muted ? "speaking-ring-off" : "speaking-ring-off")
-                    }`}>
-                      <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-neon-cyan to-neon-purple flex items-center justify-center">
-                        {/* Show live video for current user when camera is on */}
-                        {p.user_id === user?.id && isCameraOn ? (
-                          <video
-                            ref={(el) => {
-                              localVideoRef.current = el;
-                              if (el && cameraStreamRef.current) {
-                                el.srcObject = cameraStreamRef.current;
-                              }
-                            }}
-                            autoPlay
-                            playsInline
-                            muted
-                            className="w-full h-full object-cover scale-x-[-1]"
-                          />
-                        ) : p.display_picture ? (
-                          <img
-                            src={p.display_picture}
-                            alt={p.user_name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-lg font-bold text-black">
-                            {p.user_name?.charAt(0) || "?"}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <p className="text-sm font-medium text-white truncate">
-                      {p.user_name}
-                    </p>
-                    <div className="flex items-center justify-center gap-2 mt-2">
-                      <span className="text-xs text-gray-500 flex items-center gap-1">
-                        <Zap className="w-3 h-3 text-neon-cyan" />
-                        {p.focus_points_earned}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-center gap-1.5 mt-1.5">
-                      {p.is_muted ? (
-                        <MicOff className="w-3 h-3 text-red-400" />
+                {currentRoom.participants?.map((p) => {
+                  const isMe = p.user_id === user?.id;
+                  const showVideo = isMe && isCameraOn;
+
+                  return (
+                    <motion.div
+                      key={p.id}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className={`rounded-xl border text-center relative overflow-hidden ${
+                        isMe && isSpeaking && !isMuted
+                          ? "border-neon-green shadow-[0_0_12px_rgba(0,255,136,0.4)]"
+                          : "border-white/5"
+                      } ${showVideo ? "bg-black" : "bg-apex-card p-4"}`}
+                    >
+                      {/* Live video mode — full card becomes the feed */}
+                      {showVideo ? (
+                        <>
+                          <div className="aspect-[4/3] w-full relative">
+                            <video
+                              ref={(el) => {
+                                localVideoRef.current = el;
+                                if (el && cameraStreamRef.current) {
+                                  el.srcObject = cameraStreamRef.current;
+                                }
+                              }}
+                              autoPlay
+                              playsInline
+                              muted
+                              className="w-full h-full object-cover scale-x-[-1]"
+                            />
+                            {/* Host crown overlay */}
+                            {p.user_id === currentRoom.host_id && (
+                              <Crown className="w-4 h-4 text-yellow-400 absolute top-2 right-2 drop-shadow-lg" />
+                            )}
+                          </div>
+                          {/* Name & status bar at bottom */}
+                          <div className="bg-apex-darker/90 px-3 py-2 flex items-center justify-between">
+                            <p className="text-xs font-medium text-white truncate">{p.user_name}</p>
+                            <div className="flex items-center gap-1.5">
+                              {p.is_muted ? (
+                                <MicOff className="w-3 h-3 text-red-400" />
+                              ) : (
+                                <Mic className="w-3 h-3 text-neon-green" />
+                              )}
+                              <Video className="w-3 h-3 text-neon-green" />
+                            </div>
+                          </div>
+                        </>
                       ) : (
-                        <Mic className="w-3 h-3 text-neon-green" />
+                        /* Normal card — avatar + info */
+                        <>
+                          {p.user_id === currentRoom.host_id && (
+                            <Crown className="w-4 h-4 text-yellow-400 absolute top-2 right-2" />
+                          )}
+                          <div className={`w-14 h-14 rounded-full mx-auto mb-2 flex items-center justify-center ${
+                            isMe
+                              ? (isSpeaking && !isMuted ? "speaking-ring" : "speaking-ring-off")
+                              : "speaking-ring-off"
+                          }`}>
+                            <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-neon-cyan to-neon-purple flex items-center justify-center">
+                              {p.display_picture ? (
+                                <img
+                                  src={p.display_picture}
+                                  alt={p.user_name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <span className="text-lg font-bold text-black">
+                                  {p.user_name?.charAt(0) || "?"}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <p className="text-sm font-medium text-white truncate">
+                            {p.user_name}
+                          </p>
+                          <div className="flex items-center justify-center gap-2 mt-2">
+                            <span className="text-xs text-gray-500 flex items-center gap-1">
+                              <Zap className="w-3 h-3 text-neon-cyan" />
+                              {p.focus_points_earned}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-center gap-1.5 mt-1.5">
+                            {p.is_muted ? (
+                              <MicOff className="w-3 h-3 text-red-400" />
+                            ) : (
+                              <Mic className="w-3 h-3 text-neon-green" />
+                            )}
+                            {p.is_camera_on ? (
+                              <Video className="w-3 h-3 text-neon-green" />
+                            ) : (
+                              <VideoOff className="w-3 h-3 text-red-400" />
+                            )}
+                          </div>
+                        </>
                       )}
-                      {p.is_camera_on ? (
-                        <Video className="w-3 h-3 text-neon-green" />
-                      ) : (
-                        <VideoOff className="w-3 h-3 text-red-400" />
-                      )}
-                    </div>
-                  </motion.div>
-                ))}
+                    </motion.div>
+                  );
+                })}
               </div>
             </div>
           </div>
