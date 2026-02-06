@@ -294,7 +294,12 @@ export default function LoginPage() {
                 {isGoogleUser && (
                   <div className="mt-3 flex flex-col gap-2">
                     <button
-                      onClick={handleGoogleLogin}
+                      onClick={() => {
+                        googleButtonRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        // Find and click the Google rendered button
+                        const gBtn = googleButtonRef.current?.querySelector('[role="button"]') as HTMLElement;
+                        if (gBtn) gBtn.click();
+                      }}
                       className="w-full py-2 px-3 bg-white hover:bg-gray-100 text-gray-900 text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-colors"
                     >
                       <svg className="w-4 h-4" viewBox="0 0 24 24">
