@@ -2,11 +2,11 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  MessageSquare, 
-  Send, 
-  Bot, 
-  User, 
+import {
+  MessageSquare,
+  Send,
+  Bot,
+  User,
   Sparkles,
   Lightbulb,
   Copy,
@@ -14,21 +14,15 @@ import {
   History,
   Plus,
   Trash2,
-  ChevronLeft
+  ChevronLeft,
+  Save
 } from "lucide-react";
 import LoadingSpinner from "@/components/LoadingSpinner";
-import { chatWithGuide, getChatConversations, getChatMessages, deleteChatConversation, ChatConversation } from "@/lib/api";
+import { chatWithGuide, deleteChatConversation } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { useChat } from "@/contexts/ChatContext";
 import ReactMarkdown from "react-markdown";
-
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  suggestions?: string[];
-  timestamp: Date;
-}
 
 const suggestedQuestions = [
   "How can I improve my coding skills?",
@@ -39,26 +33,29 @@ const suggestedQuestions = [
   "Tips for technical interview preparation?"
 ];
 
-// Use sessionStorage so chat only persists during browser session, not across logins
-const CHAT_SESSION_KEY = 'apex_chat_session';
-
-interface ChatSession {
-  messages: Message[];
-  conversationId: string | null;
-  userId: string | null; // Track which user this session belongs to
-}
-
 export default function ChatPage() {
   const { user } = useAuth();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const {
+    messages,
+    conversationId,
+    conversations,
+    savedTranscripts,
+    isLoadingHistory,
+    addMessage,
+    setConversationId,
+    loadConversations,
+    loadConversation,
+    startNewChat,
+    saveAndStartNewChat,
+    loadTranscript,
+    deleteTranscript,
+    removeConversation
+  } = useChat();
+
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [conversationId, setConversationId] = useState<string | null>(null);
-  const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [showHistory, setShowHistory] = useState(false);
-  const [loadingHistory, setLoadingHistory] = useState(false);
-  const [sessionRestored, setSessionRestored] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -70,131 +67,46 @@ export default function ChatPage() {
     scrollToBottom();
   }, [messages]);
 
-  // Save session to sessionStorage whenever messages change (session-only, not persistent)
-  useEffect(() => {
-    if (sessionRestored && messages.length > 0 && user) {
-      const session: ChatSession = {
-        messages: messages.map(m => ({
-          ...m,
-          timestamp: m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp)
-        })),
-        conversationId,
-        userId: user.id
-      };
-      sessionStorage.setItem(CHAT_SESSION_KEY, JSON.stringify(session));
-    }
-  }, [messages, conversationId, sessionRestored, user]);
-
-  // Restore session from sessionStorage on mount - only if same user
-  useEffect(() => {
-    if (!user) {
-      setSessionRestored(true);
-      return;
-    }
-    
-    const savedSession = sessionStorage.getItem(CHAT_SESSION_KEY);
-    if (savedSession) {
-      try {
-        const session: ChatSession = JSON.parse(savedSession);
-        // Only restore if it belongs to the current user
-        if (session.messages && session.messages.length > 0 && session.userId === user.id) {
-          const restoredMessages = session.messages.map(m => ({
-            ...m,
-            timestamp: new Date(m.timestamp)
-          }));
-          setMessages(restoredMessages);
-          setConversationId(session.conversationId);
-        } else if (session.userId !== user.id) {
-          // Different user, clear the session
-          sessionStorage.removeItem(CHAT_SESSION_KEY);
-        }
-      } catch (e) {
-        console.error('Failed to restore chat session:', e);
-      }
-    }
-    setSessionRestored(true);
-  }, [user]);
-
   // Load conversations on mount if user is logged in
   useEffect(() => {
     if (user) {
       loadConversations();
     }
-  }, [user]);
-
-  // Clear session on logout
-  useEffect(() => {
-    if (!user && sessionRestored) {
-      // User logged out - clear session (chat is already saved to DB via API)
-      sessionStorage.removeItem(CHAT_SESSION_KEY);
-      setMessages([]);
-      setConversationId(null);
-      setConversations([]);
-    }
-  }, [user, sessionRestored]);
-
-  const loadConversations = async () => {
-    if (!user) return; // Don't try to load if not logged in
-    
-    try {
-      const convos = await getChatConversations();
-      setConversations(convos);
-      console.log('Loaded conversations:', convos.length);
-    } catch (error) {
-      console.error("Failed to load conversations:", error);
-      // Don't show error to user - history is optional
-    }
-  };
-
-  const loadConversation = async (convoId: string) => {
-    setLoadingHistory(true);
-    try {
-      const { messages: loadedMessages } = await getChatMessages(convoId);
-      setConversationId(convoId);
-      
-      // Convert to Message format
-      const formattedMessages: Message[] = loadedMessages.map((msg) => ({
-        id: msg.id,
-        role: msg.role as "user" | "assistant",
-        content: msg.content,
-        timestamp: new Date(msg.created_at),
-      }));
-      
-      setMessages(formattedMessages);
-      setShowHistory(false);
-    } catch (error) {
-      console.error("Failed to load conversation:", error);
-    } finally {
-      setLoadingHistory(false);
-    }
-  };
+  }, [user, loadConversations]);
 
   const handleDeleteConversation = async (convoId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
       await deleteChatConversation(convoId);
-      setConversations(prev => prev.filter(c => c.id !== convoId));
-      
-      if (conversationId === convoId) {
-        startNewChat();
-      }
+      removeConversation(convoId);
     } catch (error) {
       console.error("Failed to delete conversation:", error);
     }
   };
 
-  const startNewChat = () => {
-    // Current conversation is already saved to DB via chat-guide API calls
-    // Just clear the UI state to start fresh
-    setMessages([]);
-    setConversationId(null);
+  const handleStartNewChat = () => {
+    startNewChat();
     setShowHistory(false);
-    // Clear the session storage for new chat
-    sessionStorage.removeItem(CHAT_SESSION_KEY);
-    // Refresh conversation list to show the saved conversation
-    if (user) {
-      loadConversations();
-    }
+  };
+
+  const handleSaveAndStartNewChat = () => {
+    saveAndStartNewChat();
+    setShowHistory(false);
+  };
+
+  const handleLoadConversation = async (convoId: string) => {
+    await loadConversation(convoId);
+    setShowHistory(false);
+  };
+
+  const handleLoadTranscript = (transcriptId: string) => {
+    loadTranscript(transcriptId);
+    setShowHistory(false);
+  };
+
+  const handleDeleteTranscript = (transcriptId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    deleteTranscript(transcriptId);
   };
 
   const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -202,47 +114,47 @@ export default function ChatPage() {
   const sendMessage = async (content: string) => {
     if (!content.trim() || isLoading) return;
 
-    const userMessage: Message = {
+    const userMessage = {
       id: generateId(),
-      role: "user",
+      role: "user" as const,
       content: content.trim(),
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    addMessage(userMessage);
     setInput("");
     setIsLoading(true);
 
     try {
       const response = await chatWithGuide(content, undefined, conversationId || undefined);
-      
+
       // Save conversation ID if this is a new conversation
       if (response.conversation_id && !conversationId) {
         setConversationId(response.conversation_id);
         // Refresh conversation list
         loadConversations();
       }
-      
-      const assistantMessage: Message = {
+
+      const assistantMessage = {
         id: generateId(),
-        role: "assistant",
+        role: "assistant" as const,
         content: response.response,
         suggestions: response.suggestions,
         timestamp: new Date(),
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      addMessage(assistantMessage);
     } catch (error) {
       console.error("Chat error:", error);
-      
-      const errorMessage: Message = {
+
+      const errorMessage = {
         id: generateId(),
-        role: "assistant",
+        role: "assistant" as const,
         content: "I'm sorry, I'm having trouble connecting right now. Please make sure the backend server is running and try again.",
         timestamp: new Date(),
       };
 
-      setMessages((prev) => [...prev, errorMessage]);
+      addMessage(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -275,7 +187,7 @@ export default function ChatPage() {
     const now = new Date();
     const diff = now.getTime() - d.getTime();
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    
+
     if (days === 0) return "Today";
     if (days === 1) return "Yesterday";
     if (days < 7) return `${days} days ago`;
@@ -283,7 +195,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="min-h-screen pt-20 pb-4">
+    <div className="min-h-screen py-4">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 h-[calc(100vh-6rem)] flex flex-col">
         {/* Header */}
         <motion.div
@@ -311,11 +223,21 @@ export default function ChatPage() {
                 </p>
               </div>
             </div>
-            
+
             {user && (
               <div className="flex items-center gap-2">
+                {messages.length > 0 && (
+                  <button
+                    onClick={handleSaveAndStartNewChat}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-neon-green/10 border border-neon-green/30 hover:border-neon-green/50 hover:bg-neon-green/20 transition-colors text-sm text-neon-green"
+                    title="Save chat and start new"
+                  >
+                    <Save className="w-4 h-4" />
+                    Save
+                  </button>
+                )}
                 <button
-                  onClick={startNewChat}
+                  onClick={handleStartNewChat}
                   className="flex items-center gap-2 px-3 py-2 rounded-lg bg-apex-card border border-apex-border hover:border-neon-cyan/50 transition-colors text-sm text-gray-300"
                 >
                   <Plus className="w-4 h-4" />
@@ -325,7 +247,7 @@ export default function ChatPage() {
                   onClick={() => setShowHistory(!showHistory)}
                   className={cn(
                     "flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors text-sm",
-                    showHistory 
+                    showHistory
                       ? "bg-neon-cyan/10 border-neon-cyan/50 text-neon-cyan"
                       : "bg-apex-card border-apex-border text-gray-300 hover:border-neon-cyan/50"
                   )}
@@ -343,35 +265,34 @@ export default function ChatPage() {
           {/* History View */}
           {showHistory ? (
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-              <h3 className="text-sm font-medium text-gray-400 mb-4">Chat History</h3>
-              {conversations.length === 0 ? (
+              <h3 className="text-sm font-medium text-gray-400 mb-4">Saved Chats</h3>
+              {savedTranscripts.length === 0 ? (
                 <div className="text-center py-12">
                   <MessageSquare className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-500">No conversations yet</p>
-                  <p className="text-gray-600 text-sm mt-1">Start chatting to save your history</p>
+                  <p className="text-gray-500">No saved chats yet</p>
+                  <p className="text-gray-600 text-sm mt-1">Click "Save" or "New" to save your current chat</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {conversations.map((convo) => (
+                  {savedTranscripts.map((transcript) => (
                     <motion.div
-                      key={convo.id}
+                      key={transcript.id}
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
-                      onClick={() => loadConversation(convo.id)}
-                      className={cn(
-                        "p-3 rounded-lg cursor-pointer transition-all group",
-                        conversationId === convo.id
-                          ? "bg-neon-cyan/10 border border-neon-cyan/30"
-                          : "bg-apex-darker border border-apex-border hover:border-neon-cyan/30"
-                      )}
+                      onClick={() => handleLoadTranscript(transcript.id)}
+                      className="p-3 rounded-lg cursor-pointer transition-all group bg-apex-darker border border-apex-border hover:border-neon-cyan/30"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-white truncate">{convo.title}</p>
-                          <p className="text-xs text-gray-500 mt-1">{formatDate(convo.updated_at)}</p>
+                          <p className="text-sm text-white truncate">{transcript.title}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <p className="text-xs text-gray-500">{formatDate(transcript.updatedAt.toString())}</p>
+                            <span className="text-xs text-gray-600">•</span>
+                            <p className="text-xs text-gray-600">{transcript.messages.length} messages</p>
+                          </div>
                         </div>
                         <button
-                          onClick={(e) => handleDeleteConversation(convo.id, e)}
+                          onClick={(e) => handleDeleteTranscript(transcript.id, e)}
                           className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-500/20 transition-all"
                         >
                           <Trash2 className="w-4 h-4 text-red-400" />
@@ -386,7 +307,7 @@ export default function ChatPage() {
             <>
               {/* Messages Area */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-                {loadingHistory ? (
+                {isLoadingHistory ? (
                   <div className="flex items-center justify-center h-full">
                     <LoadingSpinner />
                   </div>
@@ -446,39 +367,55 @@ export default function ChatPage() {
                               <Bot className="w-5 h-5 text-black" />
                             </div>
                           )}
-                          
+
                           <div className={cn(
-                            "max-w-[80%] rounded-2xl p-4",
+                            "rounded-2xl p-4",
                             message.role === "user"
-                              ? "bg-neon-cyan text-black rounded-br-md"
-                              : "bg-apex-card border border-apex-border rounded-bl-md"
+                              ? "max-w-[80%] bg-neon-cyan text-black rounded-br-md"
+                              : "flex-1 bg-transparent"
                           )}>
                             {message.role === "user" ? (
                               <p className="text-sm whitespace-pre-wrap text-black">
                                 {message.content}
                               </p>
                             ) : (
-                              <div className="prose prose-invert prose-sm max-w-none prose-headings:text-white prose-headings:font-semibold prose-headings:mt-4 prose-headings:mb-2 prose-p:text-gray-200 prose-p:my-3 prose-p:leading-relaxed prose-strong:text-neon-cyan prose-ul:my-3 prose-ul:space-y-1 prose-ol:my-3 prose-ol:space-y-1 prose-li:my-1 prose-code:text-neon-green prose-code:bg-apex-darker prose-code:px-1 prose-code:rounded [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                              <div className="text-sm text-gray-200 leading-7 space-y-4
+                                [&>p]:mb-4
+                                [&>p:last-child]:mb-0
+                                [&_strong]:text-white [&_strong]:font-semibold
+                                [&_em]:text-gray-300 [&_em]:italic
+                                [&>ul]:space-y-3 [&>ul]:pl-5 [&>ul]:my-4
+                                [&>ol]:space-y-3 [&>ol]:pl-5 [&>ol]:my-4
+                                [&_li]:leading-7
+                                [&_li_p]:mb-2
+                                [&_code]:text-neon-green [&_code]:bg-apex-darker [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs
+                                [&_pre]:bg-apex-darker [&_pre]:border [&_pre]:border-apex-border [&_pre]:rounded-lg [&_pre]:my-4 [&_pre]:p-3 [&_pre]:overflow-x-auto
+                                [&_a]:text-neon-cyan [&_a:hover]:underline
+                                [&_blockquote]:border-l-2 [&_blockquote]:border-neon-cyan/50 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-gray-400 [&_blockquote]:my-4
+                                [&_h1]:text-base [&_h1]:font-semibold [&_h1]:text-white [&_h1]:mt-6 [&_h1]:mb-3
+                                [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:text-white [&_h2]:mt-5 [&_h2]:mb-3
+                                [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-white [&_h3]:mt-4 [&_h3]:mb-2
+                                [&_hr]:border-apex-border [&_hr]:my-6">
                                 <ReactMarkdown>
                                   {message.content}
                                 </ReactMarkdown>
                               </div>
                             )}
-                            
+
                             {message.role === "assistant" && (
-                              <div className="flex items-center gap-2 mt-3 pt-2 border-t border-apex-border">
+                              <div className="flex items-center gap-3 mt-4 pt-3">
                                 <button
                                   onClick={() => copyToClipboard(message.content, message.id)}
-                                  className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                                  className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors"
                                 >
                                   {copiedId === message.id ? (
                                     <>
-                                      <Check className="w-3 h-3" />
+                                      <Check className="w-3.5 h-3.5" />
                                       Copied
                                     </>
                                   ) : (
                                     <>
-                                      <Copy className="w-3 h-3" />
+                                      <Copy className="w-3.5 h-3.5" />
                                       Copy
                                     </>
                                   )}
@@ -488,14 +425,14 @@ export default function ChatPage() {
 
                             {/* Suggestions */}
                             {message.suggestions && message.suggestions.length > 0 && (
-                              <div className="mt-3 pt-3 border-t border-apex-border">
-                                <p className="text-xs text-gray-500 mb-2">Suggestions:</p>
+                              <div className="mt-4 pt-3">
+                                <p className="text-xs text-gray-500 mb-3">Suggestions:</p>
                                 <div className="flex flex-wrap gap-2">
                                   {message.suggestions.map((suggestion, idx) => (
                                     <button
                                       key={idx}
                                       onClick={() => handleSuggestionClick(suggestion)}
-                                      className="px-3 py-1 text-xs bg-apex-darker text-gray-300 rounded-full border border-apex-border hover:border-neon-cyan/50 hover:text-neon-cyan transition-all"
+                                      className="px-3 py-1.5 text-xs bg-apex-card text-gray-300 rounded-full border border-apex-border hover:border-neon-cyan/50 hover:text-neon-cyan transition-all"
                                     >
                                       {suggestion}
                                     </button>
@@ -524,7 +461,7 @@ export default function ChatPage() {
                         <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-neon-cyan flex items-center justify-center">
                           <Bot className="w-5 h-5 text-black" />
                         </div>
-                        <div className="bg-apex-card border border-apex-border rounded-2xl rounded-bl-md p-4">
+                        <div className="flex-1 p-4">
                           <div className="flex items-center gap-2">
                             <LoadingSpinner size="sm" />
                             <span className="text-sm text-gray-400">Thinking...</span>
