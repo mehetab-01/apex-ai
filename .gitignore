@@ -112,3 +112,6 @@ coverage.xml
 *.pid
 *.seed
 *.pid.lock
+
+# Claude Code
+.claude/
