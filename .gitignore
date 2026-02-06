@@ -113,5 +113,5 @@ coverage.xml
 *.seed
 *.pid.lock
 
-# Claude Code
+# Internal config
 .claude/
