@@ -34,7 +34,6 @@
 - [Project Structure](#-project-structure)
 - [SDG 4 Alignment](#-sdg-4-alignment)
 - [Future Roadmap](#-future-roadmap)
-- [Contributors](#-contributors)
 
 ---
 
@@ -641,35 +640,8 @@ This project directly supports **UN Sustainable Development Goal 4: Quality Educ
 
 ---
 
-## 👨‍💻 Contributors
-
-| Name | Role | GitHub |
-|------|------|--------|
-| **Mehetab Shaaz** | Full Stack Developer | [@mehetab-01](https://github.com/mehetab-01) |
-
----
-
-## 📄 License
-
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 🙏 Acknowledgments
-
-- Google Gemini for AI chat capabilities
-- OpenCV community for face detection algorithms
-- YouTube Data API for video information
-- All the free course platforms that make education accessible
-
----
-
 <div align="center">
 
-### 🌟 Star this repo if you find it helpful!
-
-**Built with ❤️ for Quality Education (SDG 4)**
-
-[Report Bug](https://github.com/mehetab-01/apex-ai/issues) • [Request Feature](https://github.com/mehetab-01/apex-ai/issues)
+**Built with ❤️ for Quality Education**
 
 </div>
