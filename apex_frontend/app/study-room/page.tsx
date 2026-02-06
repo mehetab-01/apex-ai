@@ -900,11 +900,11 @@ export default function StudyRoomPage() {
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="appearance-none bg-apex-card border border-white/10 rounded-xl pl-4 pr-10 py-2.5 text-sm text-white focus:outline-none focus:border-neon-cyan/50 cursor-pointer"
+              className="appearance-none bg-[#111118] border border-white/10 rounded-xl pl-4 pr-10 py-2.5 text-sm text-white focus:outline-none focus:border-neon-cyan/50 cursor-pointer"
             >
-              <option value="all">All Categories</option>
+              <option value="all" className="bg-[#111118] text-white">All Categories</option>
               {categories.map((cat) => (
-                <option key={cat.value} value={cat.value}>
+                <option key={cat.value} value={cat.value} className="bg-[#111118] text-white">
                   {cat.label}
                 </option>
               ))}
@@ -1116,10 +1116,10 @@ export default function StudyRoomPage() {
                         onChange={(e) =>
                           setCreateForm({ ...createForm, category: e.target.value })
                         }
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-neon-cyan/50"
+                        className="w-full bg-[#111118] border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-neon-cyan/50"
                       >
                         {categories.map((cat) => (
-                          <option key={cat.value} value={cat.value}>
+                          <option key={cat.value} value={cat.value} className="bg-[#111118] text-white">
                             {cat.label}
                           </option>
                         ))}
