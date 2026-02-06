@@ -703,18 +703,22 @@ export default function StudyRoomPage() {
                     {p.user_id === currentRoom.host_id && (
                       <Crown className="w-4 h-4 text-yellow-400 absolute top-2 right-2" />
                     )}
-                    <div className="w-12 h-12 rounded-full mx-auto mb-2 overflow-hidden bg-gradient-to-br from-neon-cyan to-neon-purple flex items-center justify-center">
-                      {p.display_picture ? (
-                        <img
-                          src={p.display_picture}
-                          alt={p.user_name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-lg font-bold text-black">
-                          {p.user_name?.charAt(0) || "?"}
-                        </span>
-                      )}
+                    <div className={`w-14 h-14 rounded-full mx-auto mb-2 flex items-center justify-center ${
+                      !p.is_muted ? "speaking-ring" : ""
+                    }`}>
+                      <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-neon-cyan to-neon-purple flex items-center justify-center">
+                        {p.display_picture ? (
+                          <img
+                            src={p.display_picture}
+                            alt={p.user_name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-lg font-bold text-black">
+                            {p.user_name?.charAt(0) || "?"}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <p className="text-sm font-medium text-white truncate">
                       {p.user_name}

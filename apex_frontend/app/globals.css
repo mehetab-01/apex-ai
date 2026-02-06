@@ -179,3 +179,26 @@
     animation-delay: 400ms;
   }
 }
+
+/* Speaking ring animation (Google Meet style) */
+@keyframes speaking-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(0, 255, 136, 0.15);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 255, 136, 0);
+  }
+}
+
+.speaking-ring {
+  animation: speaking-pulse 1.4s ease-in-out infinite;
+  border: 2px solid #00ff88;
+}
+
+.speaking-ring-lg {
+  animation: speaking-pulse 1.4s ease-in-out infinite;
+  border: 2.5px solid #00ff88;
+}
