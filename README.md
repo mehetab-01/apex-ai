@@ -15,7 +15,7 @@
 
 **A comprehensive AI-powered e-learning platform that combines intelligent course recommendations, real-time attention tracking, collaborative study rooms, and 24/7 AI tutoring to transform online education.**
 
-[Features](#-key-features) • [Screenshots](#-screenshots) • [Installation](#-installation) • [Tech Stack](#-technology-stack) • [API Documentation](#-api-documentation)
+[Features](#-key-features) • [Installation](#-installation) • [Tech Stack](#-technology-stack) • [API Documentation](#-api-documentation)
 
 </div>
 
@@ -26,7 +26,6 @@
 - [Problem Statement](#-problem-statement)
 - [Solution Overview](#-solution-overview)
 - [Key Features](#-key-features)
-- [Screenshots](#-screenshots)
 - [Technology Stack](#-technology-stack)
 - [System Architecture](#-system-architecture)
 - [Installation](#-installation)
@@ -163,10 +162,6 @@ Learn together with peers in real-time:
 |:----------------:|:-----------------:|
 | ![Room Lobby](docs/screenshots/features/study-room-lobby.png) | ![Active Room](docs/screenshots/features/study-room-active.png) |
 
-| Pomodoro Timer | Participant Grid |
-|:--------------:|:----------------:|
-| ![Timer](docs/screenshots/features/pomodoro-timer.png) | ![Participants](docs/screenshots/features/participants.png) |
-
 </details>
 
 ---
@@ -203,9 +198,9 @@ Get personalized career roadmaps:
 <details>
 <summary><b>📸 Screenshots</b></summary>
 
-| Career Page | Resume Analysis |
-|:-----------:|:---------------:|
-| ![Career](docs/screenshots/features/career-page.png) | ![Resume](docs/screenshots/features/resume-analysis.png) |
+| Career & Resume Analysis |
+|:------------------------:|
+| ![Career](docs/screenshots/features/career-page.png) |
 
 </details>
 
@@ -243,26 +238,6 @@ Multiple authentication methods with security features:
 | ![Login](docs/screenshots/pages/login.png) | ![Register](docs/screenshots/pages/register.png) | ![Face](docs/screenshots/features/face-validation.png) |
 
 </details>
-
----
-
-## 📸 Screenshots
-
-### Pages Overview
-
-| Page | Screenshot |
-|------|------------|
-| **Landing Page** | ![Landing](docs/screenshots/pages/landing.png) |
-| **Dashboard** | ![Dashboard](docs/screenshots/pages/dashboard.png) |
-| **Course Detail** | ![Course](docs/screenshots/pages/course-detail.png) |
-| **Learning Page** | ![Learn](docs/screenshots/pages/learn.png) |
-| **My Courses** | ![My Courses](docs/screenshots/pages/my-courses.png) |
-| **Focus Mode** | ![Focus](docs/screenshots/pages/focus-mode.png) |
-| **Study Room** | ![Study Room](docs/screenshots/pages/study-room.png) |
-| **AI Chat** | ![Chat](docs/screenshots/pages/chat.png) |
-| **Career** | ![Career](docs/screenshots/pages/career.png) |
-| **Settings** | ![Settings](docs/screenshots/pages/settings.png) |
-| **About** | ![About](docs/screenshots/pages/about.png) |
 
 ---
 
