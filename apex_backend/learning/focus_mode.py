@@ -21,6 +21,7 @@ from typing import Generator, Optional, Tuple, List
 import time
 import logging
 import os
+import platform
 
 logger = logging.getLogger(__name__)
 
@@ -283,16 +284,38 @@ class FocusModeProcessor:
 
     def start_camera(self) -> bool:
         """Start the webcam capture."""
+        # Release any existing camera first
+        if self.camera is not None:
+            try:
+                self.camera.release()
+            except Exception:
+                pass
+            self.camera = None
+
         try:
-            self.camera = cv2.VideoCapture(self.camera_index)
+            # On Windows, use DirectShow backend for better compatibility
+            if platform.system() == 'Windows':
+                self.camera = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)
+            else:
+                self.camera = cv2.VideoCapture(self.camera_index)
 
             if not self.camera.isOpened():
                 logger.error(f"Could not open camera at index {self.camera_index}")
+                # Release the failed handle immediately
+                try:
+                    self.camera.release()
+                except Exception:
+                    pass
+                self.camera = None
                 return False
 
             self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, self.frame_width)
             self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.frame_height)
             self.camera.set(cv2.CAP_PROP_FPS, 30)
+
+            # Warm up: read and discard a few frames
+            for _ in range(3):
+                self.camera.read()
 
             # Reset session tracking
             self.frame_count = 0
@@ -308,6 +331,12 @@ class FocusModeProcessor:
 
         except Exception as e:
             logger.error(f"Error starting camera: {e}")
+            if self.camera is not None:
+                try:
+                    self.camera.release()
+                except Exception:
+                    pass
+                self.camera = None
             return False
 
     def stop_camera(self) -> dict:
@@ -637,8 +666,15 @@ def get_focus_processor() -> FocusModeProcessor:
 
 def gen_frames() -> Generator[bytes, None, None]:
     """Generator function for video feed streaming."""
-    processor = get_focus_processor()
-    yield from processor.gen_frames()
+    # Always create a fresh processor to avoid stale camera handles
+    global _focus_processor
+    if _focus_processor is not None:
+        try:
+            _focus_processor.stop_camera()
+        except Exception:
+            pass
+    _focus_processor = FocusModeProcessor()
+    yield from _focus_processor.gen_frames()
 
 
 def get_current_focus_stats() -> dict:
