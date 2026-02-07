@@ -536,11 +536,24 @@ export async function endFocusSession(): Promise<{
   message: string;
   stats: FocusStats;
 }> {
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-  const response = await fetch(`${API_BASE_URL}/end_focus_session/`, {
-    method: 'POST',
-  });
-  return response.json();
+  try {
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const response = await fetch(`${API_BASE_URL}/end_focus_session/`, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      console.warn('End focus session returned status:', response.status);
+      return { status: 'error', message: 'Server returned ' + response.status, stats: {} as FocusStats };
+    }
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      return response.json();
+    }
+    return { status: 'error', message: 'Non-JSON response from server', stats: {} as FocusStats };
+  } catch (error) {
+    console.warn('Failed to end focus session:', error);
+    return { status: 'error', message: 'Network error', stats: {} as FocusStats };
+  }
 }
 
 /**

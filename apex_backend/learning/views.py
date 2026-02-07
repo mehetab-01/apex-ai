@@ -53,9 +53,16 @@ def end_focus_session(request):
     Returns:
         JsonResponse: Final session statistics
     """
-    stats = stop_focus_session()
-    return JsonResponse({
-        'status': 'success',
-        'message': 'Focus session ended',
-        'stats': stats
-    })
+    try:
+        stats = stop_focus_session()
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Focus session ended',
+            'stats': stats
+        })
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+            'stats': {}
+        }, status=200)
