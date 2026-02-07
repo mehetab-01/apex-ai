@@ -212,9 +212,15 @@ export default function FocusModePage() {
                     <>
                       <CameraOff className="w-16 h-16 text-red-400 mb-4" />
                       <h3 className="text-xl font-semibold text-white mb-2">Camera Not Available</h3>
-                      <p className="text-gray-400 text-center max-w-sm">
+                      <p className="text-gray-400 text-center max-w-sm mb-4">
                         Make sure the backend server is running and your camera is connected.
                       </p>
+                      <button
+                        onClick={() => { setVideoError(false); setShowVideo(true); }}
+                        className="px-4 py-2 bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30 rounded-lg hover:bg-neon-cyan/30 transition-all text-sm font-medium"
+                      >
+                        Retry Connection
+                      </button>
                     </>
                   ) : sessionState === "ended" ? (
                     <>

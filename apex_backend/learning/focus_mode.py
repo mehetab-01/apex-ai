@@ -569,14 +569,31 @@ class FocusModeProcessor:
 
     def gen_frames(self) -> Generator[bytes, None, None]:
         """Generator function that yields JPEG-encoded frames."""
-        if not self.start_camera():
+        max_retries = 15  # Retry camera for up to ~30 seconds
+        retry_count = 0
+
+        while not self.start_camera():
+            retry_count += 1
             placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
-            cv2.putText(placeholder, "Camera not available", (150, 240),
-                       self.font, 1, (0, 0, 255), 2, cv2.LINE_AA)
+
+            if retry_count > max_retries:
+                cv2.putText(placeholder, "Camera not available", (120, 220),
+                           self.font, 0.9, (0, 0, 255), 2, cv2.LINE_AA)
+                cv2.putText(placeholder, "Please check your camera connection", (80, 270),
+                           self.font, 0.6, (200, 200, 200), 1, cv2.LINE_AA)
+                _, buffer = cv2.imencode('.jpg', placeholder)
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+                return
+
+            cv2.putText(placeholder, "Connecting to camera...", (130, 220),
+                       self.font, 0.8, (0, 255, 255), 2, cv2.LINE_AA)
+            cv2.putText(placeholder, f"Attempt {retry_count}/{max_retries}", (220, 260),
+                       self.font, 0.6, (200, 200, 200), 1, cv2.LINE_AA)
             _, buffer = cv2.imencode('.jpg', placeholder)
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
-            return
+            time.sleep(2)
 
         try:
             while True:

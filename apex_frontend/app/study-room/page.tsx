@@ -368,32 +368,34 @@ export default function StudyRoomPage() {
     };
   }, [view, isMuted]);
 
-  // ===== Request media permissions once on room join =====
+  // ===== Acquire media on demand (only when user toggles camera/mic) =====
+  const acquireMedia = useCallback(async (): Promise<MediaStream | null> => {
+    if (cameraStreamRef.current) return cameraStreamRef.current;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } },
+        audio: { echoCancellation: true, noiseSuppression: true },
+      });
+      // Start with all tracks disabled — user controls them via toggles
+      stream.getVideoTracks().forEach(t => (t.enabled = false));
+      stream.getAudioTracks().forEach(t => (t.enabled = false));
+      cameraStreamRef.current = stream;
+      setMediaReady(true);
+      return stream;
+    } catch (err) {
+      console.warn("Media permission denied or unavailable:", err);
+      return null;
+    }
+  }, []);
+
+  // ===== Mark media ready on room join (no getUserMedia yet) =====
   useEffect(() => {
-    let cancelled = false;
-
-    const requestPermissions = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } },
-          audio: { echoCancellation: true, noiseSuppression: true },
-        });
-        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
-        stream.getVideoTracks().forEach(t => (t.enabled = false));
-        stream.getAudioTracks().forEach(t => (t.enabled = false));
-        cameraStreamRef.current = stream;
-      } catch (err) {
-        console.warn("Media permission denied or unavailable:", err);
-      }
-      if (!cancelled) setMediaReady(true);
-    };
-
     if (view === "room") {
-      requestPermissions();
+      // Don't request camera/mic permissions yet — wait for user to click toggle
+      setMediaReady(true);
     }
 
     return () => {
-      cancelled = true;
       setMediaReady(false);
       if (cameraStreamRef.current) {
         cameraStreamRef.current.getTracks().forEach(t => t.stop());
@@ -407,6 +409,11 @@ export default function StudyRoomPage() {
     const stream = cameraStreamRef.current;
     if (stream) {
       stream.getVideoTracks().forEach(t => (t.enabled = isCameraOn));
+    }
+    // Set srcObject when camera turns on
+    if (isCameraOn && localVideoRef.current && stream) {
+      localVideoRef.current.srcObject = stream;
+      localVideoRef.current.play().catch(() => {});
     }
     // Clear video element when camera is off
     if (!isCameraOn && localVideoRef.current) {
@@ -765,6 +772,14 @@ export default function StudyRoomPage() {
   const toggleMute = async () => {
     if (!currentRoom) return;
     try {
+      // Acquire media stream on first mic toggle (lazy init)
+      if (!cameraStreamRef.current) {
+        const stream = await acquireMedia();
+        if (!stream) {
+          console.warn('Could not acquire mic — permission denied or unavailable');
+          return;
+        }
+      }
       const res = await api.post(`/rooms/${currentRoom.id}/toggle-status/`, { field: 'mute' });
       if (res.data.status === 'success') {
         setIsMuted(res.data.is_muted);
@@ -777,6 +792,14 @@ export default function StudyRoomPage() {
   const toggleCamera = async () => {
     if (!currentRoom) return;
     try {
+      // Acquire media stream on first camera toggle (lazy init)
+      if (!cameraStreamRef.current) {
+        const stream = await acquireMedia();
+        if (!stream) {
+          console.warn('Could not acquire camera — permission denied or unavailable');
+          return;
+        }
+      }
       const res = await api.post(`/rooms/${currentRoom.id}/toggle-status/`, { field: 'camera' });
       if (res.data.status === 'success') {
         setIsCameraOn(res.data.is_camera_on);
