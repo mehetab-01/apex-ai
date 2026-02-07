@@ -17,7 +17,7 @@ import {
   Info
 } from "lucide-react";
 import FocusStatsDisplay, { FocusPointsCounter, AttentionIndicator } from "@/components/FocusStats";
-import { getFocusStats, saveFocusSession, endFocusSession, VIDEO_FEED_URL, type FocusStats } from "@/lib/api";
+import { saveFocusSession, type FocusStats } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -39,43 +39,69 @@ export default function FocusModePage() {
   const [localTimer, setLocalTimer] = useState(0);
   const [localPoints, setLocalPoints] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
 
-  const videoRef = useRef<HTMLImageElement>(null);
-  const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Fetch stats from backend
-  const fetchStats = useCallback(async () => {
+  // Start browser webcam via getUserMedia
+  const startCamera = useCallback(async () => {
     try {
-      const data = await getFocusStats();
-      setStats(data);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      setCameraStream(stream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      setVideoError(false);
+      setShowVideo(true);
     } catch (err) {
-      console.error("Failed to fetch focus stats:", err);
+      console.warn("Could not access camera:", err);
+      setVideoError(true);
+      setShowVideo(false);
     }
   }, []);
 
-  // Start polling stats when session is active
+  // Stop browser webcam
+  const stopCamera = useCallback(() => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  }, [cameraStream]);
+
+  // Attach stream to video element when ref or stream changes
+  useEffect(() => {
+    if (videoRef.current && cameraStream) {
+      videoRef.current.srcObject = cameraStream;
+    }
+  }, [cameraStream, showVideo]);
+
+  // Timer effect when session is active
   useEffect(() => {
     if (sessionState === "active") {
-      statsIntervalRef.current = setInterval(fetchStats, 2000);
       timerIntervalRef.current = setInterval(() => {
         setLocalTimer(prev => prev + 1);
-        setLocalPoints(prev => prev + 1); // Simplified point calculation
+        setLocalPoints(prev => prev + 1);
       }, 1000);
     }
 
     return () => {
-      if (statsIntervalRef.current) clearInterval(statsIntervalRef.current);
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
-  }, [sessionState, fetchStats]);
+  }, [sessionState]);
 
-  const startSession = () => {
+  const startSession = async () => {
     setSessionState("active");
-    setShowVideo(true);
     setVideoError(false);
     setLocalTimer(0);
     setLocalPoints(0);
+    await startCamera();
   };
 
   const pauseSession = () => {
@@ -90,15 +116,8 @@ export default function FocusModePage() {
   const endSession = async () => {
     setSessionState("ended");
     setShowVideo(false);
-    if (statsIntervalRef.current) clearInterval(statsIntervalRef.current);
+    stopCamera();
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-
-    // Stop the camera/video feed on the backend
-    try {
-      await endFocusSession();
-    } catch (error) {
-      console.error("Failed to end focus session on backend:", error);
-    }
 
     // Save session to user profile if authenticated
     if (isAuthenticated && localPoints > 0) {
@@ -138,10 +157,6 @@ export default function FocusModePage() {
     setLocalTimer(0);
     setLocalPoints(0);
     setVideoError(false);
-  };
-
-  const handleVideoError = () => {
-    setVideoError(true);
   };
 
   const formatTime = (seconds: number) => {
@@ -199,12 +214,13 @@ export default function FocusModePage() {
             >
               {/* Video Feed */}
               {showVideo && !videoError ? (
-                <img
+                <video
                   ref={videoRef}
-                  src={VIDEO_FEED_URL}
-                  alt="Focus Mode Video Feed"
-                  className="w-full h-full object-cover"
-                  onError={handleVideoError}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover mirror"
+                  style={{ transform: "scaleX(-1)" }}
                 />
               ) : (
                 <div className="absolute inset-0 bg-apex-card flex flex-col items-center justify-center">
@@ -213,13 +229,14 @@ export default function FocusModePage() {
                       <CameraOff className="w-16 h-16 text-red-400 mb-4" />
                       <h3 className="text-xl font-semibold text-white mb-2">Camera Not Available</h3>
                       <p className="text-gray-400 text-center max-w-sm mb-4">
-                        Make sure the backend server is running and your camera is connected.
+                        Please allow camera access in your browser to use face tracking.
+                        You can still earn focus points without the camera!
                       </p>
                       <button
-                        onClick={() => { setVideoError(false); setShowVideo(true); }}
+                        onClick={startCamera}
                         className="px-4 py-2 bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30 rounded-lg hover:bg-neon-cyan/30 transition-all text-sm font-medium"
                       >
-                        Retry Connection
+                        Retry Camera
                       </button>
                     </>
                   ) : sessionState === "ended" ? (
@@ -397,7 +414,7 @@ export default function FocusModePage() {
                   {
                     icon: Camera,
                     title: "Face Detection",
-                    description: "AI tracks your face in real-time using computer vision"
+                    description: "Your browser accesses your webcam for real-time face tracking"
                   },
                   {
                     icon: Eye,
