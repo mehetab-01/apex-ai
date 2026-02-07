@@ -1,8 +1,8 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   GraduationCap,
   BookOpen,
@@ -20,7 +20,8 @@ import {
   Star,
   ArrowRight,
   CheckCircle2,
-  Zap
+  Zap,
+  X
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -101,6 +102,16 @@ export default function HomePage() {
   const { isAuthenticated } = useAuth();
   const [isPaused, setIsPaused] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [showDemo, setShowDemo] = useState(false);
+  const demoVideoRef = useRef<HTMLVideoElement>(null);
+
+  // Pause video when modal closes
+  const closeDemo = useCallback(() => {
+    if (demoVideoRef.current) {
+      demoVideoRef.current.pause();
+    }
+    setShowDemo(false);
+  }, []);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollPosition, setScrollPosition] = useState(0);
   const dragStartX = useRef(0);
@@ -275,23 +286,21 @@ export default function HomePage() {
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Link>
               ) : (
-                <>
-                  <Link 
-                    href="/register" 
-                    className="group px-8 py-4 bg-neon-cyan text-black font-semibold rounded-full flex items-center gap-2 hover:shadow-lg hover:shadow-neon-cyan/25 transition-all"
-                  >
-                    Start Learning Free
-                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                  </Link>
-                  <Link 
-                    href="/login" 
-                    className="px-8 py-4 text-white font-medium rounded-full border border-white/20 hover:bg-white/5 transition-colors flex items-center gap-2"
-                  >
-                    <Play className="w-5 h-5" />
-                    Watch Demo
-                  </Link>
-                </>
+                <Link 
+                  href="/register" 
+                  className="group px-8 py-4 bg-neon-cyan text-black font-semibold rounded-full flex items-center gap-2 hover:shadow-lg hover:shadow-neon-cyan/25 transition-all"
+                >
+                  Start Learning Free
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </Link>
               )}
+              <button 
+                onClick={() => setShowDemo(true)}
+                className="px-8 py-4 text-white font-medium rounded-full border border-white/20 hover:bg-white/5 transition-colors flex items-center gap-2"
+              >
+                <Play className="w-5 h-5" />
+                Watch Demo
+              </button>
             </motion.div>
 
             {/* Trust Indicators */}
@@ -572,6 +581,53 @@ export default function HomePage() {
           </motion.div>
         </div>
       </section>
+
+      {/* Demo Video Modal */}
+      <AnimatePresence>
+        {showDemo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            onClick={closeDemo}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="relative w-full max-w-4xl rounded-2xl overflow-hidden bg-apex-darker border border-apex-border shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close Button */}
+              <button
+                onClick={closeDemo}
+                className="absolute top-3 right-3 z-10 p-2 rounded-full bg-black/60 hover:bg-black/80 text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Video Player */}
+              <video
+                ref={demoVideoRef}
+                src="/demo.mp4"
+                controls
+                autoPlay
+                className="w-full aspect-video"
+                controlsList="nodownload"
+                playsInline
+              />
+
+              {/* Title Bar */}
+              <div className="px-4 py-3 bg-apex-card border-t border-apex-border">
+                <h3 className="text-white font-semibold text-sm">APEX Platform Demo</h3>
+                <p className="text-gray-400 text-xs">See how APEX transforms your learning experience</p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
